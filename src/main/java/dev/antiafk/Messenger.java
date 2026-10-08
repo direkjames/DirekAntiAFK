@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Turns config text into components and sends it.
  * <p>
- * Order: PlaceholderAPI placeholders ({@code %player_name%}) are filled in first, for the player the
+ * Order: {@code %player%} and PlaceholderAPI placeholders are filled in first, for the player the
  * message is about, then MiniMessage formatting is applied. Values inserted from code (like a chat
  * message in debug output) are plain text and never run through PlaceholderAPI or MiniMessage.
  */
@@ -40,13 +40,23 @@ public final class Messenger {
      * @param vars    extra values for tags like {@code <count>}, inserted as plain text
      */
     public Component render(String text, Map<String, String> vars, OfflinePlayer context) {
-        String filled = context != null && plugin.hasPlaceholderApi() ? PapiHook.apply(context, text) : text;
+        String filled = text;
+        if (context != null) {
+            filled = filled.replace("%player%", nameOf(context));
+            if (plugin.hasPlaceholderApi()) filled = PapiHook.apply(context, filled);
+        }
         TagResolver.Builder resolvers = TagResolver.builder()
                 .resolver(Placeholder.parsed("prefix", plugin.settings().prefix));
         for (Map.Entry<String, String> var : vars.entrySet()) {
             resolvers.resolver(Placeholder.unparsed(var.getKey(), var.getValue() == null ? "" : var.getValue()));
         }
         return MM.deserialize(filled, resolvers.build());
+    }
+
+    /** The name {@code %player%} is replaced with. */
+    public static String nameOf(OfflinePlayer player) {
+        String name = player.getName();
+        return name == null ? player.getUniqueId().toString() : name;
     }
 
     public String toLegacy(Component component) {

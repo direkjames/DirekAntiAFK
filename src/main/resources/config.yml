@@ -5,7 +5,7 @@
 #
 #  All text supports PlaceholderAPI placeholders for the player it's about.
 #  The defaults use:
-#    %player_name%   needs the Player expansion: /papi ecloud download Player
+#    %player%        the player's name (built in, no expansion needed)
 #    %antiafk_idle%  this plugin's own placeholder (how long they've been idle)
 #  <prefix> is the prefix below.
 # ============================================================
@@ -54,11 +54,11 @@ check:
 #    [message]   send the player a MiniMessage text
 #    [broadcast] send everyone a MiniMessage text
 #    [teleport]  world x y z [yaw pitch] - instant teleport, no warmup
-#  PlaceholderAPI placeholders work in every line, e.g. %player_name%.
+#  %player% and PlaceholderAPI placeholders work in every line.
 # ------------------------------------------------------------
 actions:
   - "[message] <prefix><gray>You were AFK for <white>%antiafk_idle%</white>, sending you to the AFK area."
-  - "[console] warp AFKZone %player_name%"
+  - "[console] warp AFKZone %player%"
   # Or skip the warp plugin and its warmup entirely:
   # - "[teleport] world 0.5 100 0.5 180 0"
 
@@ -138,13 +138,13 @@ messages:
   now-afk: "<prefix><gray>You are now AFK."
   no-longer-afk: "<prefix><gray>You are no longer AFK."
   # Sent to everyone. Leave "" to stay quiet.
-  broadcast-afk: ""   # e.g. "<gray>%player_name% is now AFK"
+  broadcast-afk: ""   # e.g. "<gray>%player% is now AFK"
   broadcast-back: ""
   # Commands
   reloaded: "<prefix><green>Configuration reloaded."
   player-not-found: "<prefix><red>That player isn't online."
   list-header: "<prefix><gray>AFK players (<white><count></white>):"
-  list-entry: " <dark_gray>-</dark_gray> <white>%player_name%</white> <gray>(%antiafk_idle%)"
+  list-entry: " <dark_gray>-</dark_gray> <white>%player%</white> <gray>(%antiafk_idle%)"
   list-empty: "<prefix><gray>Nobody is AFK."
-  debug-on: "<prefix><gray>Showing activity debug for <white>%player_name%</white>. Run again to stop."
-  debug-off: "<prefix><gray>Stopped activity debug for <white>%player_name%</white>."
+  debug-on: "<prefix><gray>Showing activity debug for <white>%player%</white>. Run again to stop."
+  debug-off: "<prefix><gray>Stopped activity debug for <white>%player%</white>."

@@ -6,7 +6,7 @@ back to where they were as soon as they're active again.
 
 - **Server:** Paper 26.3 (also loads on 26.1 / 26.2)
 - **Java:** 25
-- **Required:** PlaceholderAPI, plus its Player expansion (`/papi ecloud download Player`, then `/papi reload`)
+- **Required:** PlaceholderAPI
 
 ## Building
 
@@ -92,16 +92,19 @@ TAB refreshes placeholders every 500 ms by default, so the tag appears almost in
 
 ## Placeholders in messages and actions
 
-All config text goes through PlaceholderAPI for the player it's about, then MiniMessage. Use any
-PlaceholderAPI placeholder, e.g. `%player_name%`, `%player_world%`, `%antiafk_idle%`. `<prefix>` inserts the
-configured prefix.
+All config text goes through PlaceholderAPI for the player it's about, then MiniMessage.
+
+- `%player%`: the player's name (built into DirekAntiAFK, no expansion needed)
+- `%antiafk_idle%` and the other `%antiafk_...%` placeholders below
+- Any other PlaceholderAPI placeholder, e.g. `%player_world%` (needs `/papi ecloud download Player`)
+- `<prefix>`: the configured prefix
 
 ## Actions
 
 ```yaml
 actions:
   - "[message] <prefix><gray>Sending you to the AFK area."
-  - "[console] warp AFKZone %player_name%"
+  - "[console] warp AFKZone %player%"
 
 freeze-on-actions: "5s"
 ```

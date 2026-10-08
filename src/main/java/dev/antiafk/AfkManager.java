@@ -352,6 +352,7 @@ public final class AfkManager {
         for (Map.Entry<String, String> var : vars.entrySet()) {
             command = command.replace("<" + var.getKey() + ">", var.getValue());
         }
+        command = command.replace("%player%", player.getName());
         if (plugin.hasPlaceholderApi()) {
             command = PapiHook.apply(player, command);
         }
