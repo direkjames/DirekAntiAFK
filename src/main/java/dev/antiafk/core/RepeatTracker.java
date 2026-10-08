@@ -24,6 +24,8 @@ public final class RepeatTracker {
         this.resetAfterMillis = resetAfterMillis;
     }
 
+    private long lastStreakStart;
+
     /** @return true if this action should count as activity */
     public boolean accept(String key, long now) {
         if (streaks.size() > 64) prune(now);
@@ -31,10 +33,17 @@ public final class RepeatTracker {
         long[] streak = streaks.get(key);
         if (streak == null || now - streak[1] > resetAfterMillis) {
             streaks.put(key, new long[]{now, now});
+            lastStreakStart = now;
             return true;
         }
         streak[1] = now;
+        lastStreakStart = streak[0];
         return now - streak[0] <= maxStreakMillis;
+    }
+
+    /** When the streak of the last accepted action began. Credit after this was for repetition. */
+    public long lastStreakStart() {
+        return lastStreakStart;
     }
 
     private void prune(long now) {

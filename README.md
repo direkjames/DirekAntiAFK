@@ -43,10 +43,18 @@ Only things a person at the keyboard does:
 | | Staying in the same small area: **jumping in one spot**, walking into a wall |
 | | Walking or drifting in a loop back to recent spots |
 | Breaking, placing, clicking, attacking, fishing, eating | Doing the exact same thing to the same target non-stop for longer than `max-streak` (e.g. **holding left-click on the oneblock**, a mob grinder) |
-| | Clicks spaced with machine-like timing (**auto-clickers**, held-down buttons) |
+| | Clicks with machine-like timing (**auto-clickers**, held-down buttons), even through network lag |
 | Chat, commands, inventory clicks | The same message or command over and over; commands in `ignored-commands` |
 
 Teleports (warps, `/is go`, the AFK area) never count as activity.
+
+When an action is caught as automated (repeated past `max-streak`, or machine-timed clicks), the credit
+it earned is taken back to when it started. So an auto-clicker never adds time: the player becomes AFK
+`afk-time` after their last real input.
+
+Clicking, breaking, placing, attacking, fishing, eating and dropping items keep an active player active,
+but can't end AFK on their own. An AFK player has to move, look around, chat, use a command or open their
+inventory. That way an auto-clicker can't clear the AFK tag or pull someone back out of the AFK area.
 
 ## Commands
 
@@ -129,7 +137,8 @@ Use `/antiafk debug <player>` while someone plays normally or tries an AFK setup
 
 - Real players marked AFK while mining: raise `repeat.max-streak`.
 - A movement setup isn't caught: raise `movement.radius` or `movement.loop-memory`.
-- An auto-clicker isn't caught: raise `clicks.max-deviation-ms` a little (try 25).
+- An auto-clicker isn't caught (very laggy connection): raise `clicks.tolerance-ms` (try 200).
+- Fast-clicking players get flagged: lower `clicks.tolerance-ms` (try 100).
 
 If you also run EssentialsX, turn off its own `auto-afk` and `auto-afk-kick`, so the two don't conflict.
 

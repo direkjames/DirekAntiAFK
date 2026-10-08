@@ -107,13 +107,27 @@ public final class AfkManager {
 
     // ------------------------------------------------------------------ activity
 
+    /**
+     * Activity an auto-clicker or a weighted mouse button can produce. It keeps an active player active,
+     * but can't bring back a player who is already AFK: they have to move, look around, chat, use a
+     * command or open their inventory. This stops an auto-clicker from clearing the AFK tag or pulling
+     * someone back out of the AFK area.
+     */
+    private static final Set<String> CLICK_KINDS = Set.of("break", "place", "interact", "attack", "fish", "eat", "drop");
+
     /** A real, player-driven action. Resets the AFK timer. */
     public void counted(Player player, String kind, String detail) {
         if (runningActions) return;
         PlayerSession s = sessions.get(player.getUniqueId());
         if (s == null) return;
         long now = System.currentTimeMillis();
-        s.lastActivity = now;
+
+        if (s.afk && CLICK_KINDS.contains(kind)) {
+            ignored(player, kind, "clicking alone doesn't end AFK; move or look around");
+            return;
+        }
+
+        s.credit(kind, now);
         s.lastActivityKind = kind;
         debug(player, s, kind, true, detail, now);
 
@@ -129,6 +143,20 @@ public final class AfkManager {
                 plugin.messenger().sendRaw(player, plugin.settings().returnMessage, vars(player, s, now), player);
                 player.teleportAsync(target);
             }
+        }
+    }
+
+    /**
+     * An action turned out to be automated (repeated past max-streak, or machine-timed clicks).
+     * Take back the credit it earned since {@code since}, so it never kept the player "active".
+     */
+    public void rewind(Player player, String kind, long since, String reason) {
+        PlayerSession s = sessions.get(player.getUniqueId());
+        if (s == null) return;
+        ignored(player, kind, reason);
+        if (s.rewind(kind, since)) {
+            debug(player, s, kind, false, "took back credit since " + TimeParser.format(
+                    Duration.ofMillis(System.currentTimeMillis() - since)) + " ago", System.currentTimeMillis());
         }
     }
 
@@ -159,7 +187,7 @@ public final class AfkManager {
                     || !settings.isCheckedWorld(player.getWorld().getName());
             if (exempt) {
                 // Hold the timer still. This doesn't trigger a return; only real activity does.
-                s.lastActivity = now;
+                s.credit("exempt", now);
                 if (s.checkStartedAt != 0) closeCheck(player, s);
                 if (s.afk) setAfk(player, s, false);
                 continue;

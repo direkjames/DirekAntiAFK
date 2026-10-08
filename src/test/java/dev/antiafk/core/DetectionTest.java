@@ -159,43 +159,76 @@ class DetectionTest {
 
     // ------------------------------------------------------------------ clicks
 
-    @Test
-    void autoClickerIsDetected() {
-        ClickTracker clicks = new ClickTracker(20, 15, 1000);
-        boolean last = true;
-        for (int i = 0; i < 25; i++) last = clicks.accept(i * 100L);
-        assertFalse(last);
-        assertTrue(clicks.isRobotic());
+    /** What the server sees: sent on schedule, delayed by network lag, handled at the next 50 ms tick. */
+    private static long arrival(long sentMillis, Random random, int maxLagMillis) {
+        long arrived = sentMillis + 5 + random.nextInt(maxLagMillis);
+        return ((arrived + 49) / 50) * 50;
     }
 
     @Test
-    void autoClickerWithTickJitterIsDetected() {
-        // Server ticks round clicks to 50ms; a 100ms clicker sometimes lands on 50/150
-        ClickTracker clicks = new ClickTracker(20, 25, 1000);
-        long t = 0;
-        Random random = new Random(3);
-        for (int i = 0; i < 25; i++) {
-            t += random.nextInt(10) == 0 ? 150 : 100;
-            clicks.accept(t);
+    void autoClickerIsDetectedDespiteLag() {
+        // AdvancedXRay Auto-Clicker in spam mode: a click every 2 ticks
+        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        Random random = new Random(1);
+        int countedAfterWarmup = 0;
+        for (int i = 0; i < 600; i++) {
+            boolean counted = clicks.accept(arrival(i * 100L, random, 55));
+            if (i > 80 && counted) countedAfterWarmup++;
         }
-        assertTrue(clicks.isRobotic());
+        assertEquals(0, countedAfterWarmup);
+    }
+
+    @Test
+    void slowAutoClickerIsDetected() {
+        // one click per second, e.g. respecting the sword cooldown or a slow right-click macro
+        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        Random random = new Random(2);
+        boolean last = true;
+        for (int i = 0; i < 100; i++) last = clicks.accept(arrival(i * 1000L, random, 55));
+        assertFalse(last);
+    }
+
+    @Test
+    void heldRightClickIsDetected() {
+        // Vanilla repeats "use" every 4 ticks while the button is held down
+        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        boolean last = true;
+        for (int i = 0; i < 100; i++) last = clicks.accept(i * 200L);
+        assertFalse(last);
     }
 
     @Test
     void humanClickingIsNotFlagged() {
-        ClickTracker clicks = new ClickTracker(20, 15, 1000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000);
         Random random = new Random(7);
         long t = 0;
-        for (int i = 0; i < 100; i++) {
+        int counted = 0;
+        for (int i = 0; i < 2000; i++) {
             t += 120 + random.nextInt(250);
-            assertTrue(clicks.accept(t), "click " + i);
+            if (clicks.accept(((t + 49) / 50) * 50)) counted++;
         }
+        assertTrue(counted > 1900, "human clicks counted: " + counted + "/2000");
     }
 
     @Test
-    void slowRegularActionsAreIgnored() {
-        // e.g. one click every 5 seconds is too slow to judge
-        ClickTracker clicks = new ClickTracker(20, 15, 1000);
-        for (int i = 0; i < 30; i++) assertTrue(clicks.accept(i * 5000L));
+    void verySlowRegularActionsAreIgnored() {
+        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        for (int i = 0; i < 200; i++) assertTrue(clicks.accept(i * 5000L));
+    }
+
+    @Test
+    void windowStartIsTheOldestClickLookedAt() {
+        ClickTracker clicks = new ClickTracker(48, 150, 2000);
+        for (int i = 0; i < 100; i++) clicks.accept(i * 100L);
+        assertEquals((100 - 49) * 100L, clicks.windowStart());
+    }
+
+    @Test
+    void repeatTrackerReportsWhenTheStreakStarted() {
+        RepeatTracker repeat = new RepeatTracker(60_000, 10_000);
+        for (long t = 5_000; t <= 70_000; t += 1000) repeat.accept("break:0,64,0", t);
+        assertEquals(5_000, repeat.lastStreakStart());
+        repeat.accept("break:9,64,9", 71_000);
+        assertEquals(71_000, repeat.lastStreakStart());
     }
 }

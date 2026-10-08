@@ -1,5 +1,6 @@
 package dev.antiafk;
 
+import dev.antiafk.core.ClickTracker;
 import dev.antiafk.core.MovementTracker;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -276,7 +277,8 @@ public final class ActivityListener implements Listener {
         if (s.repeats.accept(key, System.currentTimeMillis())) {
             afk().counted(player, kind, countedText);
         } else {
-            afk().ignored(player, kind, repeatedText);
+            // Repeated past max-streak: none of the repetition counted, not even the first minute of it.
+            afk().rewind(player, kind, s.repeats.lastStreakStart(), repeatedText);
         }
     }
 
@@ -284,12 +286,14 @@ public final class ActivityListener implements Listener {
     private void click(Player player, PlayerSession s, boolean rightClick, String kind, String key,
                        String countedText, String repeatedText) {
         long now = System.currentTimeMillis();
-        boolean human = (rightClick ? s.useClicks : s.attackClicks).accept(now);
+        ClickTracker clicks = rightClick ? s.useClicks : s.attackClicks;
+        boolean human = clicks.accept(now);
         boolean fresh = s.repeats.accept(key, now);
         if (!human) {
-            afk().ignored(player, kind, "clicks are evenly timed (auto-clicker or held button)");
+            // The whole run of evenly timed clicks was automated: take back what it earned.
+            afk().rewind(player, kind, clicks.windowStart(), "clicks are evenly timed (auto-clicker or held button)");
         } else if (!fresh) {
-            afk().ignored(player, kind, repeatedText);
+            afk().rewind(player, kind, s.repeats.lastStreakStart(), repeatedText);
         } else {
             afk().counted(player, kind, countedText);
         }

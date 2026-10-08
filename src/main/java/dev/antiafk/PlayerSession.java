@@ -1,5 +1,6 @@
 package dev.antiafk;
 
+import dev.antiafk.core.ActivityLedger;
 import dev.antiafk.core.ClickTracker;
 import dev.antiafk.core.LookTracker;
 import dev.antiafk.core.MovementTracker;
@@ -12,15 +13,17 @@ import java.util.UUID;
 
 /**
  * Everything AntiAFK tracks about one online player. Updated on the main thread;
- * placeholders may read {@code afk} and {@code lastActivity} from other threads.
+ * placeholders may read {@code afk} and the last activity from other threads.
  */
 public final class PlayerSession {
 
     public final UUID uuid;
 
     // Activity
-    volatile long lastActivity;
+    final ActivityLedger ledger = new ActivityLedger();
     String lastActivityKind = "join";
+    /** Latest credited activity per kind (look, move, break, ...), so one kind's credit can be taken back. */
+    final Map<String, Long> channels = new HashMap<>();
 
     // State
     volatile boolean afk;
@@ -48,7 +51,7 @@ public final class PlayerSession {
 
     PlayerSession(UUID uuid, long now, Settings settings) {
         this.uuid = uuid;
-        this.lastActivity = now;
+        credit("join", now);
         rebuildDetectors(settings);
     }
 
@@ -60,6 +63,15 @@ public final class PlayerSession {
         useClicks = new ClickTracker(s.clickSamples, s.clickMaxDeviationMillis, s.clickMaxAverageMillis);
     }
 
+    void credit(String kind, long time) {
+        ledger.credit(kind, time);
+    }
+
+    /** Takes back credit {@code kind} earned after {@code since}. @return true if the last activity moved back */
+    boolean rewind(String kind, long since) {
+        return ledger.rewind(kind, since);
+    }
+
     public boolean isAfk() {
         return afk;
     }
@@ -69,7 +81,7 @@ public final class PlayerSession {
     }
 
     public long lastActivity() {
-        return lastActivity;
+        return ledger.lastActivity();
     }
 
     public boolean isCheckShowing() {
@@ -101,7 +113,7 @@ public final class PlayerSession {
     }
 
     public long idleMillis(long now) {
-        return Math.max(0, now - lastActivity);
+        return Math.max(0, now - ledger.lastActivity());
     }
 
     public long afkMillis(long now) {

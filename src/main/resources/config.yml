@@ -118,16 +118,22 @@ detection:
     loop-memory: 8
   repeat:
     # The same action on the same target (breaking the oneblock, clicking the same block,
-    # the same chat message) stops counting after this long without a break
+    # the same chat message) stops counting after this long without a break. When that
+    # happens, none of the repetition counts: the timer goes back to when it started.
     max-streak: "1m"
     # A pause longer than this ends the streak
     reset-after: "10s"
   clicks:
-    # Clicks/attacks this evenly spaced stop counting (auto-clickers, held buttons)
-    samples: 20
-    max-deviation-ms: 15
+    # Auto-clicker check. Every 16 clicks form a group; if the groups take almost exactly the
+    # same time, the clicking is automated (network lag shifts single clicks but not whole groups).
+    # When caught, the clicks it made stop counting, going back to when the run started.
+    # How many recent clicks to compare (multiple of 16, at least 48)
+    samples: 80
+    # Groups whose lengths differ by less than this are machine-timed. Raise it if a clicker
+    # on a laggy connection isn't caught; lower it if fast-clicking players get flagged.
+    tolerance-ms: 150
     # Only clicking faster than once per this many ms is checked
-    max-average-ms: 1000
+    max-average-ms: 2000
   # Commands that don't count as activity (without the slash)
   ignored-commands: []
 

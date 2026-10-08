@@ -115,9 +115,9 @@ public final class Settings {
         moveLoopMemory = Math.max(0, c.getInt("detection.movement.loop-memory", 8));
         repeatMaxStreakMillis = time(c, "detection.repeat.max-streak", "1m", logger).toMillis();
         repeatResetAfterMillis = time(c, "detection.repeat.reset-after", "10s", logger).toMillis();
-        clickSamples = Math.max(5, c.getInt("detection.clicks.samples", 20));
-        clickMaxDeviationMillis = c.getDouble("detection.clicks.max-deviation-ms", 15);
-        clickMaxAverageMillis = c.getDouble("detection.clicks.max-average-ms", 1000);
+        clickSamples = Math.max(48, c.getInt("detection.clicks.samples", 80));
+        clickMaxDeviationMillis = c.getDouble("detection.clicks.tolerance-ms", 150);
+        clickMaxAverageMillis = c.getDouble("detection.clicks.max-average-ms", 2000);
 
         Set<String> ignored = new HashSet<>();
         for (String command : c.getStringList("detection.ignored-commands")) {
