@@ -1,0 +1,16 @@
+name: DirekAntiAFK
+version: '${version}'
+main: dev.antiafk.AntiAfkPlugin
+api-version: '26.1'
+description: Detects AFK players, including AFK pools, vehicles, macros and auto-clickers.
+depend: [PlaceholderAPI]
+
+# Commands are registered with Paper's Brigadier API in code, so none are listed here.
+
+permissions:
+  antiafk.admin:
+    description: Use /antiafk reload, list, check and debug.
+    default: op
+  antiafk.bypass:
+    description: Never marked AFK.
+    default: false

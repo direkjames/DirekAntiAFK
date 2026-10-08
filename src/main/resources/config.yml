@@ -1,0 +1,150 @@
+# ============================================================
+#  DirekAntiAFK configuration
+#  Text uses MiniMessage: https://docs.advntr.dev/minimessage/format.html
+#  Times accept: 300 (seconds), 5m, 1h30m, 1:30 (hours:minutes)
+#
+#  All text supports PlaceholderAPI placeholders for the player it's about.
+#  The defaults use:
+#    %player_name%   needs the Player expansion: /papi ecloud download Player
+#    %antiafk_idle%  this plugin's own placeholder (how long they've been idle)
+#  <prefix> is the prefix below.
+# ============================================================
+
+prefix: "<dark_gray>[<red>DirekAntiAFK</red>]</dark_gray> "
+
+# ------------------------------------------------------------
+#  Timing
+# ------------------------------------------------------------
+# A player is marked AFK after this long with no real activity.
+afk-time: "5m"
+
+# When a player has had no real activity for this long in total (counted from their
+# last activity, so it includes afk-time), the "Are you still there?" check appears.
+# If they don't answer within check.timeout, the actions below run.
+# Must be longer than afk-time.
+action-time: "10m"
+
+# ------------------------------------------------------------
+#  "Are you still there?" check
+# ------------------------------------------------------------
+check:
+  # false = skip the check and run the actions straight away at action-time
+  enabled: true
+  # dialog = popup window with a button (needs a 1.21.6+ client)
+  # chat   = clickable chat message (works everywhere, e.g. for Bedrock later)
+  type: dialog
+  # How long the player has to answer
+  timeout: "30s"
+  dialog:
+    title: "<red><bold>Are you still there?"
+    body: "<gray>You've been AFK for <white>%antiafk_idle%</white>.\n<gray>Press the button within <white><timeout></white> or you'll be moved for being AFK."
+    button: "<green><bold>I'm here!"
+    button-tooltip: "<gray>Click to continue playing"
+  chat:
+    message: "<prefix><red>Are you still there? <gray>Click the button within <white><timeout></white>:"
+    button: "<green><bold>[I'm here!]"
+    button-hover: "<gray>Click to continue playing"
+  passed-message: "<prefix><green>Thanks! Carry on."
+
+# ------------------------------------------------------------
+#  Actions: run when the player doesn't answer the check
+#  Each line starts with one of:
+#    [console]   run as console (default if no tag)
+#    [player]    run as the player
+#    [message]   send the player a MiniMessage text
+#    [broadcast] send everyone a MiniMessage text
+#    [teleport]  world x y z [yaw pitch] - instant teleport, no warmup
+#  PlaceholderAPI placeholders work in every line, e.g. %player_name%.
+# ------------------------------------------------------------
+actions:
+  - "[message] <prefix><gray>You were AFK for <white>%antiafk_idle%</white>, sending you to the AFK area."
+  - "[console] warp AFKZone %player_name%"
+  # Or skip the warp plugin and its warmup entirely:
+  # - "[teleport] world 0.5 100 0.5 180 0"
+
+# When the actions run, take the player out of any vehicle and hold them in place
+# for this long. Without this, water, bubble columns, minecarts or pistons keep
+# moving them and cancel warps that have a "don't move" warmup.
+# Set it a bit longer than your warp delay. They're released as soon as the warp
+# teleports them. "0" turns it off.
+freeze-on-actions: "5s"
+
+# ------------------------------------------------------------
+#  Return: after the actions run, send the player back to where they were
+#  as soon as they're active again.
+# ------------------------------------------------------------
+return:
+  enabled: true
+  message: "<prefix><green>Welcome back! Taking you back to where you were."
+
+# ------------------------------------------------------------
+#  AFK tag for TAB / chat: %antiafk_tag% shows this while the player is AFK
+#  and nothing otherwise. Example TAB suffix: "%antiafk_tag%"
+# ------------------------------------------------------------
+afk-tag: " <gray>[AFK]"
+# legacy      = §-color codes (TAB, most plugins)
+# minimessage = the raw text above (for plugins that read MiniMessage)
+placeholder-format: legacy
+
+# ------------------------------------------------------------
+#  Who and where
+# ------------------------------------------------------------
+# Players with antiafk.bypass are never marked AFK.
+# OP players are skipped too while this is true.
+exempt-ops: true
+exempt-gamemodes: [CREATIVE, SPECTATOR]
+
+worlds:
+  # blacklist = check every world except the ones listed
+  # whitelist = only check the worlds listed
+  mode: blacklist
+  # BentoBox AOneBlock defaults: oneblock_world, oneblock_world_nether, oneblock_world_the_end
+  list: []
+
+# ------------------------------------------------------------
+#  Detection tuning (the defaults work for most servers)
+# ------------------------------------------------------------
+detection:
+  look:
+    # Turning less than this doesn't count (degrees)
+    min-degrees: 1.0
+    # Looking at a direction used in the last N turns doesn't count (stops look macros)
+    history: 150
+  movement:
+    # Moving less than this from the last spot doesn't count (blocks).
+    # Being carried (water, bubble columns, minecarts, boats, pistons, pushing) never counts.
+    radius: 3.0
+    # Coming back to one of the last N spots doesn't count (stops loops and AFK pools)
+    loop-memory: 8
+  repeat:
+    # The same action on the same target (breaking the oneblock, clicking the same block,
+    # the same chat message) stops counting after this long without a break
+    max-streak: "1m"
+    # A pause longer than this ends the streak
+    reset-after: "10s"
+  clicks:
+    # Clicks/attacks this evenly spaced stop counting (auto-clickers, held buttons)
+    samples: 20
+    max-deviation-ms: 15
+    # Only clicking faster than once per this many ms is checked
+    max-average-ms: 1000
+  # Commands that don't count as activity (without the slash)
+  ignored-commands: []
+
+# ------------------------------------------------------------
+#  Messages (PlaceholderAPI placeholders refer to the player the message is about)
+# ------------------------------------------------------------
+messages:
+  now-afk: "<prefix><gray>You are now AFK."
+  no-longer-afk: "<prefix><gray>You are no longer AFK."
+  # Sent to everyone. Leave "" to stay quiet.
+  broadcast-afk: ""   # e.g. "<gray>%player_name% is now AFK"
+  broadcast-back: ""
+  # Commands
+  reloaded: "<prefix><green>Configuration reloaded."
+  player-not-found: "<prefix><red>That player isn't online."
+  list-header: "<prefix><gray>AFK players (<white><count></white>):"
+  list-entry: " <dark_gray>-</dark_gray> <white>%player_name%</white> <gray>(%antiafk_idle%)"
+  list-empty: "<prefix><gray>Nobody is AFK."
+  debug-on: "<prefix><gray>Showing activity debug for <white>%player_name%</white>. Run again to stop."
+  debug-off: "<prefix><gray>Stopped activity debug for <white>%player_name%</white>."
