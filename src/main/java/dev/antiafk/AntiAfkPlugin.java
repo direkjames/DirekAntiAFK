@@ -1,6 +1,7 @@
 package dev.antiafk;
 
 import dev.antiafk.command.AntiAfkCommand;
+import dev.antiafk.core.TimeParser;
 import dev.antiafk.hook.AntiAfkExpansion;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -27,6 +28,8 @@ public final class AntiAfkPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ActivityListener(this), this);
         afkManager.start();
 
+        logSummary();
+
         AntiAfkCommand command = new AntiAfkCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(command.build(), "DirekAntiAFK admin commands", AntiAfkCommand.ALIASES));
@@ -48,6 +51,12 @@ public final class AntiAfkPlugin extends JavaPlugin {
         settings = new Settings(getConfig(), getLogger());
         refreshTag();
         afkManager.reload();
+        logSummary();
+    }
+
+    private void logSummary() {
+        getLogger().info("AFK after " + TimeParser.format(settings.afkTime) + ", check at " + settings.actionTime
+                + (settings.exemptOps ? " (OPs are never checked)" : "") + ".");
     }
 
     private void refreshTag() {

@@ -1,5 +1,6 @@
 package dev.antiafk;
 
+import dev.antiafk.core.ActivityKind;
 import dev.antiafk.core.ClickTracker;
 import dev.antiafk.core.MovementTracker;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -128,9 +129,9 @@ public final class ActivityListener implements Listener {
 
         if (from.getYaw() != to.getYaw() || from.getPitch() != to.getPitch()) {
             if (s.look.accept(to.getYaw(), to.getPitch())) {
-                afk().counted(player, "look", "turned the camera");
+                afk().counted(player, ActivityKind.LOOK, "turned the camera");
             } else {
-                afk().ignored(player, "look", "tiny turn or a direction used recently");
+                afk().ignored(player, ActivityKind.LOOK, "tiny turn, or looking where they looked recently (look macro)");
             }
         }
 
@@ -142,6 +143,8 @@ public final class ActivityListener implements Listener {
     /** Players riding something (boat, minecart, horse) don't always get PlayerMoveEvent. */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onVehicleMove(VehicleMoveEvent event) {
+        // Fires every tick for every moving minecart and boat; skip the empty ones cheaply.
+        if (event.getVehicle().isEmpty()) return;
         for (Entity passenger : event.getVehicle().getPassengers()) {
             if (passenger instanceof Player player) {
                 PlayerSession s = afk().session(player.getUniqueId());
@@ -156,10 +159,10 @@ public final class ActivityListener implements Listener {
 
         MovementTracker.Result result = s.movement.accept(to.getX(), to.getY(), to.getZ(), keys);
         switch (result) {
-            case COUNTED -> afk().counted(player, "move", "walked somewhere new");
-            case NO_INPUT -> afk().ignored(player, "move", "moved without pressing keys (water, vehicle, piston or pushed)");
-            case CONFINED -> afk().ignored(player, "move", "staying in the same small area");
-            case LOOP -> afk().ignored(player, "move", "came back to a spot visited recently (loop)");
+            case COUNTED -> afk().counted(player, ActivityKind.MOVE, "walked somewhere new");
+            case NO_INPUT -> afk().ignored(player, ActivityKind.MOVE, "moved without pressing keys (water, vehicle, piston or pushed)");
+            case CONFINED -> afk().ignored(player, ActivityKind.MOVE, "staying in the same small area");
+            case LOOP -> afk().ignored(player, ActivityKind.MOVE, "came back to a spot visited recently (loop)");
         }
     }
 
@@ -172,7 +175,7 @@ public final class ActivityListener implements Listener {
         // Chat arrives off the main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!player.isOnline()) return;
-            action(player, "chat", "chat:" + text, "sent a chat message", "the same chat message over and over");
+            action(player, ActivityKind.CHAT, "chat:" + text, "sent a chat message", "the same chat message over and over");
         });
     }
 
@@ -183,23 +186,23 @@ public final class ActivityListener implements Listener {
         int colon = label.indexOf(':');
         if (colon >= 0) label = label.substring(colon + 1); // essentials:afk -> afk
         if (plugin.settings().ignoredCommands.contains(label)) {
-            afk().ignored(event.getPlayer(), "command", "/" + label + " is in ignored-commands");
+            afk().ignored(event.getPlayer(), ActivityKind.COMMAND, "/" + label + " is in ignored-commands");
             return;
         }
-        action(event.getPlayer(), "command", "cmd:" + full, "ran a command", "the same command over and over");
+        action(event.getPlayer(), ActivityKind.COMMAND, "cmd:" + full, "ran a command", "the same command over and over");
     }
 
     // ------------------------------------------------------------------ world interaction
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
-        action(event.getPlayer(), "break", "break:" + coords(event.getBlock()),
+        action(event.getPlayer(), ActivityKind.BREAK, "break:" + coords(event.getBlock()),
                 "broke a block", "breaking the same block non-stop (e.g. holding left-click on the oneblock)");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
-        action(event.getPlayer(), "place", "place:" + coords(event.getBlock()),
+        action(event.getPlayer(), ActivityKind.PLACE, "place:" + coords(event.getBlock()),
                 "placed a block", "placing on the same spot non-stop");
     }
 
@@ -215,7 +218,7 @@ public final class ActivityListener implements Listener {
         boolean right = event.getAction().isRightClick();
         String where = event.getClickedBlock() == null ? "air" : coords(event.getClickedBlock());
         String key = (right ? "use:" : "hit:") + where;
-        click(player, s, right, "interact", key, "clicked", "clicking the same spot non-stop");
+        click(player, s, right, ActivityKind.INTERACT, key, "clicked", "clicking the same spot non-stop");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -224,7 +227,7 @@ public final class ActivityListener implements Listener {
         Player player = event.getPlayer();
         PlayerSession s = afk().session(player.getUniqueId());
         if (s == null) return;
-        click(player, s, true, "interact", "use-entity:" + event.getRightClicked().getType(),
+        click(player, s, true, ActivityKind.INTERACT, "use-entity:" + event.getRightClicked().getType(),
                 "used an entity", "using the same kind of entity non-stop");
     }
 
@@ -240,38 +243,38 @@ public final class ActivityListener implements Listener {
         PlayerSession s = afk().session(player.getUniqueId());
         if (s == null) return;
         // Keyed by mob type: a mob grinder sends many different mobs of the same type
-        click(player, s, false, "attack", "attack:" + event.getEntity().getType(),
+        click(player, s, false, ActivityKind.ATTACK, "attack:" + event.getEntity().getType(),
                 "attacked", "attacking the same kind of mob non-stop (mob grinder)");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onFish(PlayerFishEvent event) {
-        action(event.getPlayer(), "fish", "fish:" + coords(event.getPlayer().getLocation().getBlock()),
+        action(event.getPlayer(), ActivityKind.FISH, "fish:" + coords(event.getPlayer().getLocation().getBlock()),
                 "fished", "fishing from the same spot non-stop");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onConsume(PlayerItemConsumeEvent event) {
-        action(event.getPlayer(), "eat", "eat:" + event.getItem().getType(), "ate or drank", "eating the same item non-stop");
+        action(event.getPlayer(), ActivityKind.EAT, "eat:" + event.getItem().getType(), "ate or drank", "eating the same item non-stop");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
-        action(event.getPlayer(), "drop", "drop:" + event.getItemDrop().getItemStack().getType(),
+        action(event.getPlayer(), ActivityKind.DROP, "drop:" + event.getItemDrop().getItemStack().getType(),
                 "dropped an item", "dropping the same item non-stop");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        action(player, "inventory", "inv:" + event.getRawSlot() + ":" + event.getClick(),
+        action(player, ActivityKind.INVENTORY, "inv:" + event.getRawSlot() + ":" + event.getClick(),
                 "used an inventory", "clicking the same slot non-stop");
     }
 
     // ------------------------------------------------------------------ helpers
 
     /** An action that counts unless the exact same thing has been repeated non-stop for too long. */
-    private void action(Player player, String kind, String key, String countedText, String repeatedText) {
+    private void action(Player player, ActivityKind kind, String key, String countedText, String repeatedText) {
         PlayerSession s = afk().session(player.getUniqueId());
         if (s == null) return;
         if (s.repeats.accept(key, System.currentTimeMillis())) {
@@ -283,7 +286,7 @@ public final class ActivityListener implements Listener {
     }
 
     /** Like {@link #action}, but also ignored when the clicks are machine-evenly spaced. */
-    private void click(Player player, PlayerSession s, boolean rightClick, String kind, String key,
+    private void click(Player player, PlayerSession s, boolean rightClick, ActivityKind kind, String key,
                        String countedText, String repeatedText) {
         long now = System.currentTimeMillis();
         ClickTracker clicks = rightClick ? s.useClicks : s.attackClicks;
@@ -291,7 +294,7 @@ public final class ActivityListener implements Listener {
         boolean fresh = s.repeats.accept(key, now);
         if (!human) {
             // The whole run of evenly timed clicks was automated: take back what it earned.
-            afk().rewind(player, kind, clicks.windowStart(), "clicks are evenly timed (auto-clicker or held button)");
+            afk().rewind(player, kind, clicks.runStart(), "clicks are evenly timed (auto-clicker or held button)");
         } else if (!fresh) {
             afk().rewind(player, kind, s.repeats.lastStreakStart(), repeatedText);
         } else {

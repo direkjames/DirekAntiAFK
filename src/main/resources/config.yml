@@ -15,14 +15,21 @@ prefix: "<dark_gray>[<red>DirekAntiAFK</red>]</dark_gray> "
 # ------------------------------------------------------------
 #  Timing
 # ------------------------------------------------------------
-# A player is marked AFK after this long with no real activity.
+# A player is marked AFK (tag shows) after this long with no real activity.
 afk-time: "5m"
 
 # When a player has had no real activity for this long in total (counted from their
 # last activity, so it includes afk-time), the "Are you still there?" check appears.
 # If they don't answer within check.timeout, the actions below run.
+#
+# Use a fixed time ("10m") or a range ("6m-10m"). With a range, every AFK period
+# picks its own random time inside it, so players can't learn exactly when it comes.
 # Must be longer than afk-time.
-action-time: "10m"
+action-time: "6m-10m"
+
+# If a player logs out and back in within this long, their idle time carries over,
+# so relogging (or an auto-reconnect mod) doesn't reset the AFK timer. "0" turns it off.
+rejoin-memory: "10m"
 
 # ------------------------------------------------------------
 #  "Are you still there?" check
@@ -90,7 +97,8 @@ placeholder-format: legacy
 #  Who and where
 # ------------------------------------------------------------
 # Players with antiafk.bypass are never marked AFK.
-# OP players are skipped too while this is true.
+# OP players are skipped too while this is true. To test the plugin on yourself, set
+# it to false (and leave creative mode). /antiafk check <player> shows if someone is exempt.
 exempt-ops: true
 exempt-gamemodes: [CREATIVE, SPECTATOR]
 
@@ -105,17 +113,26 @@ worlds:
 #  Detection tuning (the defaults work for most servers)
 # ------------------------------------------------------------
 detection:
+  # Clicking-type activity (breaking, placing, clicking, attacking, fishing, eating,
+  # dropping, inventory clicks, commands) only keeps a player active for this long after
+  # they last looked around, moved or chatted. Auto-clickers and macros at any speed can't
+  # keep anyone active on their own. Clicking also can't end AFK; looking or moving does.
+  click-only-limit: "1m"
   look:
     # Turning less than this doesn't count (degrees)
     min-degrees: 1.0
-    # Looking at a direction used in the last N turns doesn't count (stops look macros)
-    history: 150
+    # The view is split into squares this many degrees wide. Looking into a square used in
+    # the last N turns doesn't count, which stops look macros (back-and-forth, spinning,
+    # random camera wiggle). Bigger squares catch wider wiggles.
+    cell-degrees: 2.0
+    history: 200
   movement:
     # Moving less than this from the last spot doesn't count (blocks).
     # Being carried (water, bubble columns, minecarts, boats, pistons, pushing) never counts.
     radius: 3.0
-    # Coming back to one of the last N spots doesn't count (stops loops and AFK pools)
-    loop-memory: 8
+    # Coming back to one of the last N spots doesn't count (stops loops and AFK pools).
+    # 16 spots covers loops up to about 48 blocks long.
+    loop-memory: 16
   repeat:
     # The same action on the same target (breaking the oneblock, clicking the same block,
     # the same chat message) stops counting after this long without a break. When that
@@ -134,6 +151,8 @@ detection:
     tolerance-ms: 150
     # Only clicking faster than once per this many ms is checked
     max-average-ms: 2000
+    # A pause this long starts a new run of clicks
+    pause: "5s"
   # Commands that don't count as activity (without the slash)
   ignored-commands: []
 

@@ -18,43 +18,67 @@ Open the folder in IntelliJ IDEA and let Gradle sync, then run `build`:
 
 The jar is written to `build/libs/DirekAntiAFK-<version>.jar`. `build` also runs the detection unit tests.
 
+## Going live
+
+1. Install PlaceholderAPI, then put `DirekAntiAFK-<version>.jar` in `plugins/` and start the server.
+2. In `plugins/DirekAntiAFK/config.yml`, set `afk-time`, `action-time` and your `actions`
+   (your AFK area warp). Keep `freeze-on-actions` a little longer than the warp's delay.
+3. Add `%antiafk_tag%` to your TAB suffix.
+4. If EssentialsX is installed, turn off its `auto-afk` and `auto-afk-kick`.
+5. Test with a non-OP account in survival (OPs and creative players are never checked), using
+   `/antiafk debug <player>` to watch what counts.
+6. Run `/antiafk reload` after any config change.
+
+Updating from an older version: settings missing from your `config.yml` use their defaults. To see and
+change the new ones, rename your old config, let a fresh one generate, then copy your values over.
+
 ## How it works
 
 ```
-real activity ──► idle ≥ afk-time ──► marked AFK (tag shows in TAB)
-                  idle ≥ action-time ──► "Are you still there?" popup for check.timeout
+real activity ──► idle ≥ afk-time ──► marked AFK (tag shows in TAB), a random check time is picked
+                  idle ≥ check time ──► "Are you still there?" popup for check.timeout
                   no answer ──► actions run (their location is saved first)
-any real activity ──► not AFK any more, sent back to the saved location
+looking around, moving or chatting ──► not AFK any more, sent back to the saved location
 ```
 
-Both times are counted from the player's last real activity. With `afk-time: 5m` and `action-time: 10m`,
-the tag appears after 5 minutes, the popup after 10, and the actions run at 10 minutes 30 seconds.
+All times are counted from the player's last real activity.
+
+```yaml
+afk-time: "5m"
+action-time: "6m-10m"   # or a fixed time like "10m"
+```
+
+With a range, every AFK period picks its own random time inside it, so players can't learn when the
+popup comes. Here the tag appears after 5 minutes and the popup somewhere between 6 and 10 minutes.
 
 The actions only run once per AFK period. A player standing in the AFK area isn't sent there again.
+Logging out and back in within `rejoin-memory` (10 minutes) keeps their idle time, so relogging or an
+auto-reconnect mod can't reset the timer.
 
 ## What counts as activity
 
-Only things a person at the keyboard does:
+**Real input** resets the timer and ends AFK:
 
 | Counts | Doesn't count |
 |---|---|
-| Turning the camera to new directions | Tiny turns, or flicking between the same angles (look macros, spin macros) |
+| Turning the camera to new directions | Tiny turns, or looking where they looked recently: **look macros** (back-and-forth, spinning, random camera wiggle) |
 | Walking somewhere new while pressing movement keys | Being moved without pressing keys: **water currents, AFK pools, bubble columns, minecarts, boats, pistons, being pushed** |
 | | Staying in the same small area: **jumping in one spot**, walking into a wall |
 | | Walking or drifting in a loop back to recent spots |
-| Breaking, placing, clicking, attacking, fishing, eating | Doing the exact same thing to the same target non-stop for longer than `max-streak` (e.g. **holding left-click on the oneblock**, a mob grinder) |
-| | Clicks with machine-like timing (**auto-clickers**, held-down buttons), even through network lag |
-| Chat, commands, inventory clicks | The same message or command over and over; commands in `ignored-commands` |
+| Chatting, answering the AFK check | The same message over and over |
+
+**Click-type activity** (breaking, placing, clicking, attacking, fishing, eating, dropping items, inventory
+clicks, commands) keeps an active player active, but only for `click-only-limit` (1 minute) after their last
+real input, and it can't end AFK. This is what stops **auto-clickers and macros at any speed**: someone who
+only clicks becomes AFK `afk-time` after they last looked around or moved. On top of that:
+
+- The same action on the same target non-stop for longer than `max-streak` stops counting (e.g. **holding
+  left-click on the oneblock**, a mob grinder).
+- Clicks with machine-like timing stop counting (**auto-clickers**, held-down buttons), even through lag.
+
+When either is caught, the credit it earned is taken back to when it started.
 
 Teleports (warps, `/is go`, the AFK area) never count as activity.
-
-When an action is caught as automated (repeated past `max-streak`, or machine-timed clicks), the credit
-it earned is taken back to when it started. So an auto-clicker never adds time: the player becomes AFK
-`afk-time` after their last real input.
-
-Clicking, breaking, placing, attacking, fishing, eating and dropping items keep an active player active,
-but can't end AFK on their own. An AFK player has to move, look around, chat, use a command or open their
-inventory. That way an auto-clicker can't clear the AFK tag or pull someone back out of the AFK area.
 
 ## Commands
 
@@ -72,8 +96,9 @@ Alias: `/aafk`. Commands, permissions (`antiafk.*`) and placeholders (`%antiafk_
 | `antiafk.admin` | op | Use the commands above |
 | `antiafk.bypass` | nobody | Never marked AFK |
 
-OP players are also skipped while `exempt-ops: true` (the default). To test the plugin on yourself,
-set it to `false` or de-op temporarily. If you use a wildcard (`*`) in LuckPerms, set `antiafk.bypass`
+OP players are also skipped while `exempt-ops: true` (the default), and so are players in creative or
+spectator mode. **To test the plugin on yourself, set `exempt-ops: false` and use survival mode.**
+`/antiafk check <player>` and `/antiafk debug <player>` say when, and why, a player is exempt. If you use a wildcard (`*`) in LuckPerms, set `antiafk.bypass`
 to false for anyone who should still be checked.
 
 ## Placeholders (PlaceholderAPI)
@@ -135,10 +160,13 @@ little longer than your warp delay.
 Use `/antiafk debug <player>` while someone plays normally or tries an AFK setup, then adjust
 `detection` in `config.yml`:
 
-- Real players marked AFK while mining: raise `repeat.max-streak`.
+- Real players marked AFK while mining: raise `click-only-limit` (try 2m).
 - A movement setup isn't caught: raise `movement.radius` or `movement.loop-memory`.
 - An auto-clicker isn't caught (very laggy connection): raise `clicks.tolerance-ms` (try 200).
 - Fast-clicking players get flagged: lower `clicks.tolerance-ms` (try 100).
+
+Performance: each mouse or movement update costs about 0.1 microseconds in the detection code, which
+allocates no memory, and everything else runs once per second. Empty minecarts and boats are skipped.
 
 If you also run EssentialsX, turn off its own `auto-afk` and `auto-afk-kick`, so the two don't conflict.
 

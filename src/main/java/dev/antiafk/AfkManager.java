@@ -1,5 +1,6 @@
 package dev.antiafk;
 
+import dev.antiafk.core.ActivityKind;
 import dev.antiafk.core.TimeParser;
 import dev.antiafk.hook.PapiHook;
 import io.papermc.paper.dialog.Dialog;
@@ -13,6 +14,7 @@ import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -23,6 +25,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,14 +34,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Runs the AFK timeline for every player:
  * <pre>
- *   real activity ──► idle ≥ afk-time ──► AFK (tag on)
- *                     idle ≥ action-time ──► "Are you still there?" check
+ *   real activity ──► idle ≥ afk-time ──► AFK (tag on), a random action time is picked
+ *                     idle ≥ action time ──► "Are you still there?" check
  *                     no answer within timeout ──► actions run (location saved)
- *   any real activity ──► not AFK, check closed, sent back to the saved location
+ *   real input (look, move, chat) ──► not AFK, check closed, sent back to the saved location
  * </pre>
  */
 public final class AfkManager {
@@ -48,6 +52,8 @@ public final class AfkManager {
     /** watched player -> staff watching their debug output */
     private final Map<UUID, Set<UUID>> debugWatchers = new HashMap<>();
     private final NamespacedKey returnKey;
+    private final NamespacedKey idleKey;
+    private final NamespacedKey quitKey;
     private BukkitTask task;
     /** True while actions are running, so commands the actions run don't count as activity. */
     private boolean runningActions;
@@ -55,6 +61,8 @@ public final class AfkManager {
     public AfkManager(AntiAfkPlugin plugin) {
         this.plugin = plugin;
         this.returnKey = new NamespacedKey(plugin, "return-location");
+        this.idleKey = new NamespacedKey(plugin, "idle-at-quit");
+        this.quitKey = new NamespacedKey(plugin, "quit-at");
     }
 
     public void start() {
@@ -69,24 +77,49 @@ public final class AfkManager {
 
     public void reload() {
         Settings settings = plugin.settings();
-        sessions.values().forEach(s -> s.rebuildDetectors(settings));
+        for (PlayerSession s : sessions.values()) {
+            s.rebuildDetectors(settings);
+            // The action-time range may have changed: pick again for anyone still waiting for their check.
+            if (s.afk && !s.actioned && s.checkStartedAt == 0) s.actionAtMillis = pickActionTime(settings);
+        }
     }
 
     // ------------------------------------------------------------------ sessions
 
     public void join(Player player) {
-        PlayerSession session = new PlayerSession(player.getUniqueId(), System.currentTimeMillis(), plugin.settings());
-        session.returnLocation = loadReturnLocation(player);
-        session.movement.reset(player.getX(), player.getY(), player.getZ());
-        sessions.put(player.getUniqueId(), session);
+        Settings settings = plugin.settings();
+        long now = System.currentTimeMillis();
+        PlayerSession s = new PlayerSession(player.getUniqueId(), now, settings);
+        PersistentDataContainer data = player.getPersistentDataContainer();
+
+        s.returnLocation = loadReturnLocation(player);
+        // They were sent away for being AFK and haven't been back since: don't send them again.
+        s.actioned = s.returnLocation != null;
+
+        // Rejoining quickly doesn't reset the AFK timer (relogging or auto-reconnect to dodge it).
+        Long idleAtQuit = data.get(idleKey, PersistentDataType.LONG);
+        Long quitAt = data.get(quitKey, PersistentDataType.LONG);
+        if (idleAtQuit != null && quitAt != null && !settings.rejoinMemory.isZero()
+                && now - quitAt <= settings.rejoinMemory.toMillis()) {
+            s.ledger.restore(now - idleAtQuit);
+        }
+        data.remove(idleKey);
+        data.remove(quitKey);
+
+        s.movement.reset(player.getX(), player.getY(), player.getZ());
+        sessions.put(player.getUniqueId(), s);
     }
 
     public void quit(Player player) {
-        PlayerSession session = sessions.remove(player.getUniqueId());
-        if (session == null) return;
-        if (session.checkStartedAt != 0) closeCheck(player, session);
+        PlayerSession s = sessions.remove(player.getUniqueId());
+        if (s == null) return;
+        if (s.checkStartedAt != 0) closeCheck(player, s);
         // Keep the return spot across a relog: they come back in the AFK area and return on activity.
-        saveReturnLocation(player, session.returnLocation);
+        saveReturnLocation(player, s.returnLocation);
+        long now = System.currentTimeMillis();
+        PersistentDataContainer data = player.getPersistentDataContainer();
+        data.set(idleKey, PersistentDataType.LONG, s.idleMillis(now));
+        data.set(quitKey, PersistentDataType.LONG, now);
         debugWatchers.remove(player.getUniqueId());
         debugWatchers.values().forEach(w -> w.remove(player.getUniqueId()));
     }
@@ -96,38 +129,43 @@ public final class AfkManager {
     }
 
     public List<Player> afkPlayers() {
-        return Bukkit.getOnlinePlayers().stream()
-                .filter(p -> {
-                    PlayerSession s = sessions.get(p.getUniqueId());
-                    return s != null && s.afk;
-                })
-                .map(p -> (Player) p)
-                .toList();
+        List<Player> result = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            PlayerSession s = sessions.get(player.getUniqueId());
+            if (s != null && s.afk) result.add(player);
+        }
+        return result;
+    }
+
+    /** @return why this player is never marked AFK right now, or null if they're checked */
+    public String exemptReason(Player player) {
+        Settings settings = plugin.settings();
+        if (player.hasPermission("antiafk.bypass")) return "has the antiafk.bypass permission";
+        if (settings.exemptOps && player.isOp()) return "is OP (exempt-ops is true)";
+        GameMode mode = player.getGameMode();
+        if (settings.exemptGameModes.contains(mode)) return "is in " + mode.name().toLowerCase(Locale.ROOT) + " mode (exempt-gamemodes)";
+        if (!settings.isCheckedWorld(player.getWorld().getName())) return "is in world '" + player.getWorld().getName() + "', which isn't checked (worlds)";
+        return null;
     }
 
     // ------------------------------------------------------------------ activity
 
-    /**
-     * Activity an auto-clicker or a weighted mouse button can produce. It keeps an active player active,
-     * but can't bring back a player who is already AFK: they have to move, look around, chat, use a
-     * command or open their inventory. This stops an auto-clicker from clearing the AFK tag or pulling
-     * someone back out of the AFK area.
-     */
-    private static final Set<String> CLICK_KINDS = Set.of("break", "place", "interact", "attack", "fish", "eat", "drop");
-
-    /** A real, player-driven action. Resets the AFK timer. */
-    public void counted(Player player, String kind, String detail) {
+    /** A player-driven action. Resets the AFK timer, within the rules in {@link dev.antiafk.core.ActivityLedger}. */
+    public void counted(Player player, ActivityKind kind, String detail) {
         if (runningActions) return;
         PlayerSession s = sessions.get(player.getUniqueId());
         if (s == null) return;
         long now = System.currentTimeMillis();
 
-        if (s.afk && CLICK_KINDS.contains(kind)) {
-            ignored(player, kind, "clicking alone doesn't end AFK; move or look around");
+        if (kind.clickOnly && s.afk) {
+            ignored(player, s, kind, "clicking alone doesn't end AFK; move or look around", now);
             return;
         }
-
-        s.credit(kind, now);
+        if (!s.ledger.credit(kind, now)) {
+            ignored(player, s, kind, "only clicking, no looking around or moving for over "
+                    + TimeParser.format(Duration.ofMillis(plugin.settings().clickOnlyLimitMillis)), now);
+            return;
+        }
         s.lastActivityKind = kind;
         debug(player, s, kind, true, detail, now);
 
@@ -139,8 +177,9 @@ public final class AfkManager {
             Location target = s.returnLocation;
             s.returnLocation = null;
             saveReturnLocation(player, null);
-            if (plugin.settings().returnEnabled && target.getWorld() != null) {
+            if (plugin.settings().returnEnabled && target.isWorldLoaded()) {
                 plugin.messenger().sendRaw(player, plugin.settings().returnMessage, vars(player, s, now), player);
+                player.leaveVehicle();
                 player.teleportAsync(target);
             }
         }
@@ -150,22 +189,26 @@ public final class AfkManager {
      * An action turned out to be automated (repeated past max-streak, or machine-timed clicks).
      * Take back the credit it earned since {@code since}, so it never kept the player "active".
      */
-    public void rewind(Player player, String kind, long since, String reason) {
+    public void rewind(Player player, ActivityKind kind, long since, String reason) {
         PlayerSession s = sessions.get(player.getUniqueId());
         if (s == null) return;
-        ignored(player, kind, reason);
-        if (s.rewind(kind, since)) {
-            debug(player, s, kind, false, "took back credit since " + TimeParser.format(
-                    Duration.ofMillis(System.currentTimeMillis() - since)) + " ago", System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        ignored(player, s, kind, reason, now);
+        if (s.ledger.rewind(kind, since)) {
+            debug(player, s, kind, false, "took back credit from the last "
+                    + TimeParser.format(Duration.ofMillis(now - since)), now);
         }
     }
 
     /** Something happened but doesn't count (carried by water, repeated action, auto-clicker...). */
-    public void ignored(Player player, String kind, String reason) {
+    public void ignored(Player player, ActivityKind kind, String reason) {
         PlayerSession s = sessions.get(player.getUniqueId());
-        if (s == null) return;
+        if (s != null) ignored(player, s, kind, reason, System.currentTimeMillis());
+    }
+
+    private void ignored(Player player, PlayerSession s, ActivityKind kind, String reason, long now) {
         s.lastIgnored.put(kind, reason);
-        debug(player, s, kind, false, reason, System.currentTimeMillis());
+        debug(player, s, kind, false, reason, now);
     }
 
     // ------------------------------------------------------------------ timeline
@@ -173,6 +216,8 @@ public final class AfkManager {
     private void tick() {
         Settings settings = plugin.settings();
         long now = System.currentTimeMillis();
+        long afkMillis = settings.afkTime.toMillis();
+        long timeoutMillis = settings.checkTimeout.toMillis();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             PlayerSession s = sessions.get(player.getUniqueId());
@@ -181,29 +226,25 @@ public final class AfkManager {
                 continue;
             }
 
-            boolean exempt = player.hasPermission("antiafk.bypass")
-                    || (settings.exemptOps && player.isOp())
-                    || settings.exemptGameModes.contains(player.getGameMode())
-                    || !settings.isCheckedWorld(player.getWorld().getName());
-            if (exempt) {
+            if (exemptReason(player) != null) {
                 // Hold the timer still. This doesn't trigger a return; only real activity does.
-                s.credit("exempt", now);
+                s.ledger.credit(ActivityKind.EXEMPT, now);
                 if (s.checkStartedAt != 0) closeCheck(player, s);
                 if (s.afk) setAfk(player, s, false);
                 continue;
             }
 
             long idle = s.idleMillis(now);
-            if (!s.afk && idle >= settings.afkTime.toMillis()) {
+            if (!s.afk && idle >= afkMillis) {
                 setAfk(player, s, true);
             }
 
             if (s.checkStartedAt != 0) {
-                if (now - s.checkStartedAt >= settings.checkTimeout.toMillis()) {
+                if (now - s.checkStartedAt >= timeoutMillis) {
                     closeCheck(player, s);
                     runActions(player, s, now);
                 }
-            } else if (!s.actioned && idle >= settings.actionTime.toMillis()) {
+            } else if (s.afk && !s.actioned && idle >= s.actionAtMillis) {
                 if (settings.checkEnabled) {
                     startCheck(player, s, now);
                 } else {
@@ -216,11 +257,16 @@ public final class AfkManager {
     private void setAfk(Player player, PlayerSession s, boolean afk) {
         s.afk = afk;
         long now = System.currentTimeMillis();
-        if (afk) s.afkSince = now;
+        // Each AFK period gets its own random check time, so players can't learn when it comes.
+        if (afk) s.actionAtMillis = pickActionTime(plugin.settings());
         Map<String, String> vars = vars(player, s, now);
         Messenger messenger = plugin.messenger();
         messenger.send(player, afk ? "now-afk" : "no-longer-afk", vars, player);
         messenger.broadcast(afk ? "broadcast-afk" : "broadcast-back", vars, player);
+    }
+
+    private static long pickActionTime(Settings settings) {
+        return settings.actionTime.pickMillis(ThreadLocalRandom.current());
     }
 
     // ------------------------------------------------------------------ check
@@ -284,7 +330,7 @@ public final class AfkManager {
                 plugin.messenger().sendRaw(player, plugin.settings().checkPassedMessage, vars(player, s, System.currentTimeMillis()), player);
             }
             // Clicking proves they're there, even if the timeout just passed.
-            counted(player, "check", "answered the AFK check");
+            counted(player, ActivityKind.CHECK, "answered the AFK check");
         };
         if (Bukkit.isPrimaryThread()) handle.run();
         else Bukkit.getScheduler().runTask(plugin, handle);
@@ -304,9 +350,11 @@ public final class AfkManager {
         s.actioned = true;
         if (settings.returnEnabled && s.returnLocation == null) {
             s.returnLocation = player.getLocation();
+            // Saved right away, so a crash or restart doesn't lose it.
+            saveReturnLocation(player, s.returnLocation);
         }
         plugin.getLogger().info(player.getName() + " was AFK for " + TimeParser.format(Duration.ofMillis(s.idleMillis(now)))
-                + " and didn't answer the check. Running AFK actions.");
+                + (settings.checkEnabled ? " and didn't answer the check" : "") + ". Running AFK actions.");
 
         // Take them off vehicles and hold them still, so water, bubble columns, minecarts or pistons
         // can't cancel a warp that has a "don't move" warmup. The next teleport releases them.
@@ -347,7 +395,7 @@ public final class AfkManager {
                 case "teleport" -> teleport(player, text);
                 default -> plugin.getLogger().warning("Unknown action type [" + type + "] in: " + line);
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             plugin.getLogger().warning("AFK action '" + line + "' failed: " + e.getMessage());
         }
     }
@@ -364,10 +412,14 @@ public final class AfkManager {
             plugin.getLogger().warning("[teleport] world '" + p[0] + "' doesn't exist.");
             return;
         }
-        Location target = new Location(world, Double.parseDouble(p[1]), Double.parseDouble(p[2]), Double.parseDouble(p[3]),
-                p.length == 6 ? Float.parseFloat(p[4]) : 0f, p.length == 6 ? Float.parseFloat(p[5]) : 0f);
-        player.leaveVehicle();
-        player.teleportAsync(target);
+        try {
+            Location target = new Location(world, Double.parseDouble(p[1]), Double.parseDouble(p[2]), Double.parseDouble(p[3]),
+                    p.length == 6 ? Float.parseFloat(p[4]) : 0f, p.length == 6 ? Float.parseFloat(p[5]) : 0f);
+            player.leaveVehicle();
+            player.teleportAsync(target);
+        } catch (NumberFormatException e) {
+            plugin.getLogger().warning("[teleport] coordinates must be numbers. Got: " + text);
+        }
     }
 
     /** Ends the freeze, e.g. once the warp happened. */
@@ -399,19 +451,20 @@ public final class AfkManager {
         return true;
     }
 
-    private void debug(Player player, PlayerSession s, String kind, boolean counted, String detail, long now) {
+    private void debug(Player player, PlayerSession s, ActivityKind kind, boolean counted, String detail, long now) {
+        if (debugWatchers.isEmpty()) return;
         Set<UUID> watchers = debugWatchers.get(player.getUniqueId());
         if (watchers == null || watchers.isEmpty()) return;
 
         // At most one line per kind and result per second; movement fires many times a second.
-        String key = kind + counted;
-        Long last = s.lastDebug.get(key);
-        if (last != null && now - last < 1000) return;
-        s.lastDebug.put(key, now);
+        int slot = kind.ordinal() * 2 + (counted ? 0 : 1);
+        if (now - s.lastDebug[slot] < 1000) return;
+        s.lastDebug[slot] = now;
 
         String line = "<dark_gray>[debug]</dark_gray> <white><player></white> <gray><kind>:</gray> "
                 + (counted ? "<green>counted</green>" : "<red>ignored</red>") + " <dark_gray>(<detail>)";
-        Component message = plugin.messenger().render(line, Map.of("player", player.getName(), "kind", kind, "detail", detail), null);
+        Component message = plugin.messenger().render(line,
+                Map.of("player", player.getName(), "kind", kind.label, "detail", detail), null);
         for (UUID uuid : watchers) {
             Player watcher = Bukkit.getPlayer(uuid);
             if (watcher != null) watcher.sendMessage(message);
@@ -431,7 +484,7 @@ public final class AfkManager {
 
     private void saveReturnLocation(Player player, Location location) {
         PersistentDataContainer data = player.getPersistentDataContainer();
-        if (location == null || location.getWorld() == null) {
+        if (location == null || !location.isWorldLoaded()) {
             data.remove(returnKey);
             return;
         }
@@ -440,16 +493,20 @@ public final class AfkManager {
     }
 
     private Location loadReturnLocation(Player player) {
-        String text = player.getPersistentDataContainer().get(returnKey, PersistentDataType.STRING);
+        PersistentDataContainer data = player.getPersistentDataContainer();
+        String text = data.get(returnKey, PersistentDataType.STRING);
         if (text == null) return null;
         try {
             String[] p = text.split(";");
             World world = Bukkit.getWorld(UUID.fromString(p[0]));
-            if (world == null) return null;
+            if (world == null) {
+                data.remove(returnKey); // that world is gone
+                return null;
+            }
             return new Location(world, Double.parseDouble(p[1]), Double.parseDouble(p[2]), Double.parseDouble(p[3]),
                     Float.parseFloat(p[4]), Float.parseFloat(p[5]));
         } catch (RuntimeException e) {
-            player.getPersistentDataContainer().remove(returnKey);
+            data.remove(returnKey);
             return null;
         }
     }

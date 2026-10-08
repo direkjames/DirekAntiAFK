@@ -14,7 +14,7 @@ class DetectionTest {
 
     @Test
     void lookCountsRealMouseMovement() {
-        LookTracker look = new LookTracker(1f, 100);
+        LookTracker look = new LookTracker(1f, 2f, 200);
         look.accept(0, 0);
         int counted = 0;
         Random random = new Random(1);
@@ -29,14 +29,14 @@ class DetectionTest {
 
     @Test
     void lookIgnoresTinyChanges() {
-        LookTracker look = new LookTracker(1f, 100);
+        LookTracker look = new LookTracker(1f, 2f, 200);
         look.accept(10, 10);
         assertFalse(look.accept(10.3f, 10.2f));
     }
 
     @Test
     void lookIgnoresBackAndForthMacro() {
-        LookTracker look = new LookTracker(1f, 100);
+        LookTracker look = new LookTracker(1f, 2f, 200);
         look.accept(0, 0);
         assertTrue(look.accept(90, 0));   // first time looking there
         assertFalse(look.accept(0, 0));   // back to start: seen
@@ -46,7 +46,7 @@ class DetectionTest {
 
     @Test
     void lookIgnoresSpinMacroAfterFirstLap() {
-        LookTracker look = new LookTracker(1f, 200);
+        LookTracker look = new LookTracker(1f, 2f, 200);
         look.accept(0, 0);
         int firstLap = 0, laterLaps = 0;
         for (int lap = 0; lap < 3; lap++) {
@@ -61,8 +61,22 @@ class DetectionTest {
     }
 
     @Test
+    void lookIgnoresRandomWiggleMacro() {
+        // Camera wiggled at random within a 20 x 20 degree area
+        LookTracker look = new LookTracker(1f, 2f, 200);
+        Random random = new Random(9);
+        look.accept(0, 0);
+        int countedLater = 0;
+        for (int i = 0; i < 1000; i++) {
+            boolean counted = look.accept(random.nextFloat() * 20 - 10, random.nextFloat() * 20 - 10);
+            if (i >= 400 && counted) countedLater++;
+        }
+        assertTrue(countedLater <= 10, "wiggle counted " + countedLater + " times");
+    }
+
+    @Test
     void lookHandlesYawWrapAround() {
-        LookTracker look = new LookTracker(1f, 100);
+        LookTracker look = new LookTracker(1f, 2f, 200);
         look.accept(179.8f, 0);
         assertFalse(look.accept(-179.9f, 0)); // only 0.3 degrees apart
     }
@@ -168,7 +182,7 @@ class DetectionTest {
     @Test
     void autoClickerIsDetectedDespiteLag() {
         // AdvancedXRay Auto-Clicker in spam mode: a click every 2 ticks
-        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000, 5000);
         Random random = new Random(1);
         int countedAfterWarmup = 0;
         for (int i = 0; i < 600; i++) {
@@ -181,7 +195,7 @@ class DetectionTest {
     @Test
     void slowAutoClickerIsDetected() {
         // one click per second, e.g. respecting the sword cooldown or a slow right-click macro
-        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000, 5000);
         Random random = new Random(2);
         boolean last = true;
         for (int i = 0; i < 100; i++) last = clicks.accept(arrival(i * 1000L, random, 55));
@@ -191,7 +205,7 @@ class DetectionTest {
     @Test
     void heldRightClickIsDetected() {
         // Vanilla repeats "use" every 4 ticks while the button is held down
-        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000, 5000);
         boolean last = true;
         for (int i = 0; i < 100; i++) last = clicks.accept(i * 200L);
         assertFalse(last);
@@ -199,7 +213,7 @@ class DetectionTest {
 
     @Test
     void humanClickingIsNotFlagged() {
-        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000, 5000);
         Random random = new Random(7);
         long t = 0;
         int counted = 0;
@@ -212,15 +226,18 @@ class DetectionTest {
 
     @Test
     void verySlowRegularActionsAreIgnored() {
-        ClickTracker clicks = new ClickTracker(80, 150, 2000);
+        ClickTracker clicks = new ClickTracker(80, 150, 2000, 5000);
         for (int i = 0; i < 200; i++) assertTrue(clicks.accept(i * 5000L));
     }
 
     @Test
-    void windowStartIsTheOldestClickLookedAt() {
-        ClickTracker clicks = new ClickTracker(48, 150, 2000);
+    void pauseEndsTheRun() {
+        ClickTracker clicks = new ClickTracker(48, 150, 2000, 5000);
         for (int i = 0; i < 100; i++) clicks.accept(i * 100L);
-        assertEquals((100 - 49) * 100L, clicks.windowStart());
+        assertTrue(clicks.isCaught());
+        assertEquals(0, clicks.runStart());
+        assertTrue(clicks.accept(100 * 100L + 6000)); // paused 6 s: a new run, not judged yet
+        assertEquals(100 * 100L + 6000, clicks.runStart());
     }
 
     @Test
@@ -232,3 +249,4 @@ class DetectionTest {
         assertEquals(71_000, repeat.lastStreakStart());
     }
 }
+

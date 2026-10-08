@@ -7,6 +7,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.antiafk.AntiAfkPlugin;
 import dev.antiafk.Messenger;
 import dev.antiafk.PlayerSession;
+import dev.antiafk.core.ActivityKind;
 import dev.antiafk.core.TimeParser;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -90,13 +91,22 @@ public final class AntiAfkCommand {
         }
 
         long now = System.currentTimeMillis();
-        String status = s.isAfk() ? "<red>AFK" : "<green>Active";
-        if (target.hasPermission("antiafk.bypass")) status += " <gray>(has antiafk.bypass)";
+        String exempt = plugin.afkManager().exemptReason(target);
+        String status = exempt != null ? "<yellow>never checked" : s.isAfk() ? "<red>AFK" : "<green>Active";
 
         line(sender, "<prefix><white><player></white> <gray>is " + status, Map.of("player", target.getName()));
-        line(sender, " <gray>Idle for: <white><idle></white> (last activity: <white><kind></white>)", Map.of(
+        if (exempt != null) {
+            line(sender, " <yellow>Exempt: <player> <exempt>", Map.of("player", target.getName(), "exempt", exempt));
+        }
+        line(sender, " <gray>Idle for: <white><idle></white> (last activity: <white><kind></white>, last real input <white><real></white> ago)", Map.of(
                 "idle", TimeParser.format(Duration.ofMillis(s.idleMillis(now))),
-                "kind", s.lastActivityKind()));
+                "kind", s.lastActivityKind().label,
+                "real", TimeParser.format(Duration.ofMillis(Math.max(0, now - s.lastRealInput())))));
+        if (s.isAfk() && !s.actionsRan()) {
+            line(sender, " <gray>Check at: <white><at></white> idle <dark_gray>(picked from action-time <range>)", Map.of(
+                    "at", TimeParser.format(Duration.ofMillis(s.actionAtMillis())),
+                    "range", plugin.settings().actionTime.toString()));
+        }
         line(sender, " <gray>Check showing: <white><check></white> <dark_gray>|</dark_gray> <gray>Actions ran: <white><ran></white> "
                 + "<dark_gray>|</dark_gray> <gray>Return pending: <white><ret>", Map.of(
                 "check", yesNo(s.isCheckShowing()), "ran", yesNo(s.actionsRan()), "ret", yesNo(s.hasReturnLocation())));
@@ -104,12 +114,12 @@ public final class AntiAfkCommand {
                 "a", s.isAttackClickingRobotic() ? "flagged" : "ok",
                 "u", s.isUseClickingRobotic() ? "flagged" : "ok"));
 
-        Map<String, String> ignored = s.lastIgnored();
+        Map<ActivityKind, String> ignored = s.lastIgnored();
         if (!ignored.isEmpty()) {
             line(sender, " <gray>Last ignored:", Map.of());
             ignored.forEach((kind, reason) ->
                     line(sender, "  <dark_gray>-</dark_gray> <white><kind></white><gray>: <reason>",
-                            Map.of("kind", kind, "reason", reason)));
+                            Map.of("kind", kind.label, "reason", reason)));
         }
         return Command.SINGLE_SUCCESS;
     }
@@ -123,6 +133,11 @@ public final class AntiAfkCommand {
         }
         boolean on = plugin.afkManager().toggleDebug(watcher.getUniqueId(), target.getUniqueId());
         plugin.messenger().send(watcher, on ? "debug-on" : "debug-off", Map.of("player", target.getName()), target);
+        String exempt = plugin.afkManager().exemptReason(target);
+        if (on && exempt != null) {
+            line(watcher, "<prefix><yellow>Note: <player> <exempt>, so they're never marked AFK.",
+                    Map.of("player", target.getName(), "exempt", exempt));
+        }
         return Command.SINGLE_SUCCESS;
     }
 

@@ -1,6 +1,7 @@
 package dev.antiafk;
 
 import dev.antiafk.core.TimeParser;
+import dev.antiafk.core.TimeRange;
 import org.bukkit.GameMode;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -20,7 +21,10 @@ public final class Settings {
 
     public final String prefix;
     public final Duration afkTime;
-    public final Duration actionTime;
+    /** A fixed time or a range; each AFK period picks its own random time from it. */
+    public final TimeRange actionTime;
+    /** Idle time is kept if a player rejoins within this long (stops relogging/auto-reconnect resetting it). */
+    public final Duration rejoinMemory;
 
     public final boolean checkEnabled;
     public final CheckType checkType;
@@ -48,6 +52,7 @@ public final class Settings {
     public final Set<String> worlds;
 
     public final float lookMinDegrees;
+    public final float lookCellDegrees;
     public final int lookHistory;
     public final double moveRadius;
     public final int moveLoopMemory;
@@ -56,6 +61,8 @@ public final class Settings {
     public final int clickSamples;
     public final double clickMaxDeviationMillis;
     public final double clickMaxAverageMillis;
+    public final long clickPauseMillis;
+    public final long clickOnlyLimitMillis;
     public final Set<String> ignoredCommands;
 
     private final ConfigurationSection messages;
@@ -64,14 +71,24 @@ public final class Settings {
         prefix = c.getString("prefix", "");
 
         Duration afk = time(c, "afk-time", "5m", logger);
-        Duration action = time(c, "action-time", "10m", logger);
-        if (action.compareTo(afk) <= 0) {
-            logger.warning("action-time (" + TimeParser.format(action) + ") must be longer than afk-time ("
-                    + TimeParser.format(afk) + "). Using afk-time + 5m.");
-            action = afk.plusMinutes(5);
+        TimeRange action;
+        String actionText = c.getString("action-time", "10m");
+        try {
+            action = TimeRange.parse(actionText);
+        } catch (IllegalArgumentException e) {
+            logger.warning("Invalid action-time '" + actionText + "': " + e.getMessage() + ". Using 10m.");
+            action = TimeRange.of(Duration.ofMinutes(10));
+        }
+        if (action.min().compareTo(afk) <= 0) {
+            Duration min = afk.plusMinutes(1);
+            Duration max = action.max().compareTo(min) < 0 ? min : action.max();
+            logger.warning("action-time (" + action + ") must be longer than afk-time (" + TimeParser.format(afk)
+                    + "). Using " + new TimeRange(min, max) + ".");
+            action = new TimeRange(min, max);
         }
         afkTime = afk;
         actionTime = action;
+        rejoinMemory = optionalTime(c, "rejoin-memory", "10m", logger);
 
         checkEnabled = c.getBoolean("check.enabled", true);
         checkType = "chat".equalsIgnoreCase(c.getString("check.type", "dialog")) ? CheckType.CHAT : CheckType.DIALOG;
@@ -110,14 +127,17 @@ public final class Settings {
         worlds = Set.copyOf(c.getStringList("worlds.list"));
 
         lookMinDegrees = (float) Math.max(0.1, c.getDouble("detection.look.min-degrees", 1.0));
-        lookHistory = Math.max(1, c.getInt("detection.look.history", 150));
+        lookCellDegrees = (float) Math.max(0.5, c.getDouble("detection.look.cell-degrees", 2.0));
+        lookHistory = Math.max(1, c.getInt("detection.look.history", 200));
         moveRadius = Math.max(0.5, c.getDouble("detection.movement.radius", 3.0));
-        moveLoopMemory = Math.max(0, c.getInt("detection.movement.loop-memory", 8));
+        moveLoopMemory = Math.max(0, c.getInt("detection.movement.loop-memory", 16));
         repeatMaxStreakMillis = time(c, "detection.repeat.max-streak", "1m", logger).toMillis();
         repeatResetAfterMillis = time(c, "detection.repeat.reset-after", "10s", logger).toMillis();
         clickSamples = Math.max(48, c.getInt("detection.clicks.samples", 80));
         clickMaxDeviationMillis = c.getDouble("detection.clicks.tolerance-ms", 150);
         clickMaxAverageMillis = c.getDouble("detection.clicks.max-average-ms", 2000);
+        clickPauseMillis = time(c, "detection.clicks.pause", "5s", logger).toMillis();
+        clickOnlyLimitMillis = time(c, "detection.click-only-limit", "1m", logger).toMillis();
 
         Set<String> ignored = new HashSet<>();
         for (String command : c.getStringList("detection.ignored-commands")) {
