@@ -1,36 +1,63 @@
-# DirekAntiAFK
+# dkAFK
 
-Private Paper plugin that detects AFK players, including the usual tricks to look active, and runs your
-own commands when someone stays AFK too long (for example, sending them to the AFK area). They're sent
-back to where they were as soon as they're active again.
+AFK detection for the **dk plugin suite** (formerly DirekAntiAFK). Author: **direk james**.
 
-- **Server:** Paper 26.3 (also loads on 26.1 / 26.2)
+Detects AFK players, including the usual tricks to look active, and runs your own commands when someone
+stays AFK too long (for example, sending them to the AFK area). They're sent back to where they were as
+soon as they're active again.
+
+dkAFK is dkCore's AFK provider: every other dk plugin asks dkCore whether a player is AFK, and dkCore asks
+dkAFK. See [For other dk plugins](#for-other-dk-plugins).
+
+- **Server:** Purpur 26.3 (also loads on Paper, and on 26.1 / 26.2)
 - **Java:** 25
-- **Required:** PlaceholderAPI
+- **Required:** [dkCore](https://github.com/direkjames/dkCore) 1.1.1+, PlaceholderAPI
+- **Package:** `com.direk.dkafk`
 
 ## Building
 
-Open the folder in IntelliJ IDEA and let Gradle sync, then run `build`:
+1. Build dkCore once so dkAFK can compile against it: in the dkCore project run `./gradlew publishToMavenLocal`.
+2. Open this folder in IntelliJ IDEA (Project SDK and Gradle JVM: **Java 25**) and let Gradle sync.
+3. Run `build`:
 
 ```
 ./gradlew build
 ```
 
-The jar is written to `build/libs/DirekAntiAFK-<version>.jar`. `build` also runs the detection unit tests.
+The jar is written to `build/libs/dkAFK-<version>.jar`. `build` also runs the detection unit tests.
+dkCore is never shaded into the jar; it stays its own plugin on the server.
 
 ## Going live
 
-1. Install PlaceholderAPI, then put `DirekAntiAFK-<version>.jar` in `plugins/` and start the server.
-2. In `plugins/DirekAntiAFK/config.yml`, set `afk-time`, `action-time` and your `actions`
+1. Install dkCore and PlaceholderAPI, then put `dkAFK-<version>.jar` in `plugins/` and start the server.
+2. In `plugins/dkAFK/config.yml`, set `afk-time`, `action-time` and your `actions`
    (your AFK area warp). Keep `freeze-on-actions` a little longer than the warp's delay.
-3. Add `%antiafk_tag%` to your TAB suffix.
+3. Add `%dkafk_tag%` to your TAB suffix.
 4. If EssentialsX is installed, turn off its `auto-afk` and `auto-afk-kick`.
 5. Test with a non-OP account in survival (OPs and creative players are never checked), using
-   `/antiafk debug <player>` to watch what counts.
-6. Run `/antiafk reload` after any config change.
+   `/dkafk debug <player>` to watch what counts.
+6. Run `/dkafk reload` after any config change.
 
-Updating from an older version: settings missing from your `config.yml` use their defaults. To see and
-change the new ones, rename your old config, let a fresh one generate, then copy your values over.
+New settings are added to your `config.yml` automatically on startup (dkCore's config loader), with
+their comments, so you never need to regenerate it after an update.
+
+## Upgrading from DirekAntiAFK
+
+1. Stop the server, delete `DirekAntiAFK-<version>.jar` from `plugins/` (keep its folder), and put in
+   dkCore and `dkAFK-<version>.jar`. Don't run both jars at once.
+2. On first start dkAFK copies `plugins/DirekAntiAFK/` into `plugins/dkAFK/`, so your config carries over.
+   Once you've checked it, you can delete the old folder.
+3. Everything from DirekAntiAFK keeps working, so nothing else has to change on day one:
+
+| Old | New | Old name still works? |
+|---|---|---|
+| `/antiafk`, `/aafk` | `/dkafk` | Yes, as aliases |
+| `antiafk.admin`, `antiafk.bypass` | `dkafk.admin`, `dkafk.bypass` | Yes, they grant the new ones |
+| `%antiafk_...%` | `%dkafk_...%` | Yes, both are registered |
+| Saved return spots and rejoin timers on players | moved to dkAFK automatically when they join | - |
+| Plugins with `depend: [DirekAntiAFK]` | | Yes, dkAFK `provides` that name |
+
+When it suits you, switch TAB and LuckPerms to the new names.
 
 ## How it works
 
@@ -84,32 +111,36 @@ Teleports (warps, `/is go`, the AFK area) never count as activity.
 
 | Command | What it does |
 |---|---|
-| `/antiafk reload` | Reload `config.yml` |
-| `/antiafk list` | Show AFK players |
-| `/antiafk check <player>` | Status, idle time, last activity, and why recent actions were ignored |
-| `/antiafk debug <player>` | Live feed of what counts and what doesn't for that player. Run again to stop |
+| `/dkafk reload` | Reload `config.yml` |
+| `/dkafk list` | Show AFK players |
+| `/dkafk check <player>` | Status, idle time, last activity, and why recent actions were ignored |
+| `/dkafk debug <player>` | Live feed of what counts and what doesn't for that player. Run again to stop |
 
-Alias: `/aafk`. Commands, permissions (`antiafk.*`) and placeholders (`%antiafk_...%`) keep the short `antiafk` name.
+Aliases: `/antiafk`, `/aafk`.
 
 | Permission | Default | Meaning |
 |---|---|---|
-| `antiafk.admin` | op | Use the commands above |
-| `antiafk.bypass` | nobody | Never marked AFK |
+| `dkafk.admin` | op | Use the commands above |
+| `dkafk.bypass` | nobody | Never marked AFK |
+
+The old `antiafk.admin` and `antiafk.bypass` still work and grant the new permissions.
 
 OP players are also skipped while `exempt-ops: true` (the default), and so are players in creative or
 spectator mode. **To test the plugin on yourself, set `exempt-ops: false` and use survival mode.**
-`/antiafk check <player>` and `/antiafk debug <player>` say when, and why, a player is exempt. If you use a wildcard (`*`) in LuckPerms, set `antiafk.bypass`
+`/dkafk check <player>` and `/dkafk debug <player>` say when, and why, a player is exempt. If you use a wildcard (`*`) in LuckPerms, set `dkafk.bypass`
 to false for anyone who should still be checked.
 
 ## Placeholders (PlaceholderAPI)
 
 | Placeholder | Value |
 |---|---|
-| `%antiafk_tag%` | The `afk-tag` while AFK, otherwise empty |
-| `%antiafk_afk%` | `true` / `false` |
-| `%antiafk_idle%` | Time since last real activity, e.g. `4m 30s` |
-| `%antiafk_idle_seconds%` | Same, in seconds |
-| `%antiafk_afk_time%` | Idle time while AFK, otherwise empty |
+| `%dkafk_tag%` | The `afk-tag` while AFK, otherwise empty |
+| `%dkafk_afk%` | `true` / `false` |
+| `%dkafk_idle%` | Time since last real activity, e.g. `4m 30s` |
+| `%dkafk_idle_seconds%` | Same, in seconds |
+| `%dkafk_afk_time%` | Idle time while AFK, otherwise empty |
+
+The same placeholders also answer to the old `%antiafk_...%` names.
 
 ### TAB setup
 
@@ -117,18 +148,18 @@ Add the tag to the suffix in TAB's `groups.yml` (or wherever you set suffixes):
 
 ```yaml
 _DEFAULT_:
-  tabsuffix: "%antiafk_tag%"
+  tabsuffix: "%dkafk_tag%"
 ```
 
-If you already use a suffix, put the tag next to it, e.g. `"%luckperms-suffix%%antiafk_tag%"`.
+If you already use a suffix, put the tag next to it, e.g. `"%luckperms-suffix%%dkafk_tag%"`.
 TAB refreshes placeholders every 500 ms by default, so the tag appears almost instantly.
 
 ## Placeholders in messages and actions
 
 All config text goes through PlaceholderAPI for the player it's about, then MiniMessage.
 
-- `%player%`: the player's name (built into DirekAntiAFK, no expansion needed)
-- `%antiafk_idle%` and the other `%antiafk_...%` placeholders below
+- `%player%`: the player's name (built into dkAFK, no expansion needed)
+- `%dkafk_idle%` and the other `%dkafk_...%` placeholders above
 - Any other PlaceholderAPI placeholder, e.g. `%player_world%` (needs `/papi ecloud download Player`)
 - `<prefix>`: the configured prefix
 
@@ -157,7 +188,7 @@ little longer than your warp delay.
 
 ## Tuning
 
-Use `/antiafk debug <player>` while someone plays normally or tries an AFK setup, then adjust
+Use `/dkafk debug <player>` while someone plays normally or tries an AFK setup, then adjust
 `detection` in `config.yml`:
 
 - Real players marked AFK while mining: raise `click-only-limit` (try 2m).
@@ -170,19 +201,52 @@ allocates no memory, and everything else runs once per second. Empty minecarts a
 
 If you also run EssentialsX, turn off its own `auto-afk` and `auto-afk-kick`, so the two don't conflict.
 
+## For other dk plugins
+
+Other dk plugins never depend on dkAFK directly. They ask dkCore, which asks whichever AFK provider is
+registered (dkAFK). If dkAFK isn't installed, `isAfk` is always `false` and the event never fires, so a
+plugin keeps working without it.
+
+Is a player AFK right now (safe from any thread, e.g. async chat):
+
+```java
+if (DkCore.get().isAfk(player.getUniqueId())) { ... }
+// or, in a DkPlugin:
+if (core().isAfk(player.getUniqueId())) { ... }
+```
+
+React the moment someone goes AFK or comes back:
+
+```java
+@EventHandler
+public void onAfkChange(DkAfkChangeEvent e) {
+    if (e.isAfk()) { /* just went AFK */ } else { /* just came back */ }
+}
+```
+
+`DkAfkChangeEvent` fires on the main thread. It isn't fired when an AFK player logs out, so clear any
+per-player state on `PlayerQuitEvent` as usual. `core().hasAfkProvider()` tells you if dkAFK is running.
+
+## Startup banner
+
+On startup the console shows the dkAFK logo, version, the dkCore link, PlaceholderAPI, the AFK timeline,
+the check, the actions and who is exempt. dkCore's "dk suite ready" summary also lists dkAFK and shows
+the AFK provider as registered. Turn the dkAFK banner off with `startup-banner: false`.
+
 ## Project layout
 
 ```
-src/main/java/dev/antiafk/
-  AntiAfkPlugin.java      plugin entry point
+src/main/java/com/direk/dkafk/
+  DkAfk.java              plugin entry point (extends dkCore's DkPlugin), registers the AFK service
   Settings.java           reads and validates config.yml
-  AfkManager.java         AFK timeline, check popup, actions, return
+  AfkManager.java         AFK timeline, check popup, actions, return, DkAfkChangeEvent
   ActivityListener.java   turns events into "counted" or "ignored"
   PlayerSession.java      per-player state
   Messenger.java          MiniMessage rendering
-  command/                /antiafk (Brigadier)
+  command/                /dkafk (Brigadier)
   core/                   detection logic (no Paper code, unit tested)
   hook/                   PlaceholderAPI
+  startup/                console banner
 ```
 
 Some detection ideas (repeated actions, click timing, confinement) were inspired by

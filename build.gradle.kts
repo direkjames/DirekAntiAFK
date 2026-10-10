@@ -1,22 +1,31 @@
+// dkAFK - AFK detection for the dk plugin suite. Author: direk james
+//
+//   ./gradlew build   -> build/libs/dkAFK-<version>.jar (put on the server next to dkCore)
+//
+// Needs dkCore in your local Maven repo first: in the dkCore project run
+//   ./gradlew publishToMavenLocal
+
 plugins {
     java
 }
 
-group = "dev.antiafk"
-version = "1.3.0"
+group = "com.direk"
+version = "2.0.0"
 
 repositories {
+    mavenLocal()
     mavenCentral()
-    maven("https://repo.papermc.io/repository/maven-public/") {
-        name = "papermc"
-    }
+    maven("https://repo.purpurmc.org/snapshots")
+    maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.extendedclip.com/releases/") {
         name = "placeholderapi"
     }
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.3.build.+")
+    compileOnly("org.purpurmc.purpur:purpur-api:${property("purpurVersion")}")
+    // Never shade dkCore: it is its own plugin on the server.
+    compileOnly("com.direk:dkcore:${property("dkcoreVersion")}")
     compileOnly("me.clip:placeholderapi:2.12.3")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
@@ -30,6 +39,7 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
+    options.release.set(25)
 }
 
 tasks.test {
@@ -37,9 +47,13 @@ tasks.test {
 }
 
 tasks.processResources {
-    val props = mapOf("version" to project.version)
+    val props = mapOf("version" to project.version.toString())
     inputs.properties(props)
     filesMatching("plugin.yml") {
         expand(props)
     }
+}
+
+tasks.jar {
+    archiveFileName.set("dkAFK-${project.version}.jar")
 }

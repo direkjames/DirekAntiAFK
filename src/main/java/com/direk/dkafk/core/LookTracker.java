@@ -1,4 +1,4 @@
-package dev.antiafk.core;
+package com.direk.dkafk.core;
 
 /**
  * Decides whether a head rotation is real mouse movement.

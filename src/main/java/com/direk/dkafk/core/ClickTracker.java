@@ -1,4 +1,4 @@
-package dev.antiafk.core;
+package com.direk.dkafk.core;
 
 /**
  * Spots auto-clickers and held-down buttons by how evenly spaced the clicks are.

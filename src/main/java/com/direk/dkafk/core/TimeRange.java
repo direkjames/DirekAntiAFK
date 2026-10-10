@@ -1,4 +1,4 @@
-package dev.antiafk.core;
+package com.direk.dkafk.core;
 
 import java.time.Duration;
 import java.util.random.RandomGenerator;

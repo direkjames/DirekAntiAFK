@@ -1,8 +1,9 @@
-package dev.antiafk;
+package com.direk.dkafk;
 
-import dev.antiafk.core.ActivityKind;
-import dev.antiafk.core.TimeParser;
-import dev.antiafk.hook.PapiHook;
+import com.direk.dkafk.core.ActivityKind;
+import com.direk.dkafk.core.TimeParser;
+import com.direk.dkafk.hook.PapiHook;
+import com.direk.dkcore.afk.DkAfkChangeEvent;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -44,25 +45,36 @@ import java.util.concurrent.ThreadLocalRandom;
  *                     no answer within timeout ──► actions run (location saved)
  *   real input (look, move, chat) ──► not AFK, check closed, sent back to the saved location
  * </pre>
+ * Every switch between AFK and active fires dkCore's {@link DkAfkChangeEvent}, so other dk plugins can react.
+ * <p>
+ * Author: direk james
  */
 public final class AfkManager {
 
-    private final AntiAfkPlugin plugin;
+    private final DkAfk plugin;
     private final Map<UUID, PlayerSession> sessions = new ConcurrentHashMap<>();
     /** watched player -> staff watching their debug output */
     private final Map<UUID, Set<UUID>> debugWatchers = new HashMap<>();
     private final NamespacedKey returnKey;
     private final NamespacedKey idleKey;
     private final NamespacedKey quitKey;
+    /** Where DirekAntiAFK (before the rename) stored the same data on each player. */
+    private final NamespacedKey legacyReturnKey;
+    private final NamespacedKey legacyIdleKey;
+    private final NamespacedKey legacyQuitKey;
     private BukkitTask task;
     /** True while actions are running, so commands the actions run don't count as activity. */
     private boolean runningActions;
 
-    public AfkManager(AntiAfkPlugin plugin) {
+    public AfkManager(DkAfk plugin) {
         this.plugin = plugin;
         this.returnKey = new NamespacedKey(plugin, "return-location");
         this.idleKey = new NamespacedKey(plugin, "idle-at-quit");
         this.quitKey = new NamespacedKey(plugin, "quit-at");
+        String legacy = DkAfk.LEGACY_NAME.toLowerCase(Locale.ROOT);
+        this.legacyReturnKey = NamespacedKey.fromString(legacy + ":return-location");
+        this.legacyIdleKey = NamespacedKey.fromString(legacy + ":idle-at-quit");
+        this.legacyQuitKey = NamespacedKey.fromString(legacy + ":quit-at");
     }
 
     public void start() {
@@ -91,6 +103,7 @@ public final class AfkManager {
         long now = System.currentTimeMillis();
         PlayerSession s = new PlayerSession(player.getUniqueId(), now, settings);
         PersistentDataContainer data = player.getPersistentDataContainer();
+        migrateLegacyKeys(data);
 
         s.returnLocation = loadReturnLocation(player);
         // They were sent away for being AFK and haven't been back since: don't send them again.
@@ -128,6 +141,15 @@ public final class AfkManager {
         return sessions.get(uuid);
     }
 
+    /**
+     * Whether the player is AFK right now. This is what dkCore's {@code isAfk(uuid)} returns.
+     * Safe to call from any thread (e.g. async chat).
+     */
+    public boolean isAfk(UUID uuid) {
+        PlayerSession s = sessions.get(uuid);
+        return s != null && s.isAfk();
+    }
+
     public List<Player> afkPlayers() {
         List<Player> result = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -140,7 +162,7 @@ public final class AfkManager {
     /** @return why this player is never marked AFK right now, or null if they're checked */
     public String exemptReason(Player player) {
         Settings settings = plugin.settings();
-        if (player.hasPermission("antiafk.bypass")) return "has the antiafk.bypass permission";
+        if (player.hasPermission("dkafk.bypass")) return "has the dkafk.bypass permission";
         if (settings.exemptOps && player.isOp()) return "is OP (exempt-ops is true)";
         GameMode mode = player.getGameMode();
         if (settings.exemptGameModes.contains(mode)) return "is in " + mode.name().toLowerCase(Locale.ROOT) + " mode (exempt-gamemodes)";
@@ -150,7 +172,7 @@ public final class AfkManager {
 
     // ------------------------------------------------------------------ activity
 
-    /** A player-driven action. Resets the AFK timer, within the rules in {@link dev.antiafk.core.ActivityLedger}. */
+    /** A player-driven action. Resets the AFK timer, within the rules in {@link com.direk.dkafk.core.ActivityLedger}. */
     public void counted(Player player, ActivityKind kind, String detail) {
         if (runningActions) return;
         PlayerSession s = sessions.get(player.getUniqueId());
@@ -263,6 +285,7 @@ public final class AfkManager {
         Messenger messenger = plugin.messenger();
         messenger.send(player, afk ? "now-afk" : "no-longer-afk", vars, player);
         messenger.broadcast(afk ? "broadcast-afk" : "broadcast-back", vars, player);
+        Bukkit.getPluginManager().callEvent(new DkAfkChangeEvent(player, afk));
     }
 
     private static long pickActionTime(Settings settings) {
@@ -480,6 +503,21 @@ public final class AfkManager {
         vars.put("world", player.getWorld().getName());
         vars.put("afk_time", TimeParser.format(Duration.ofMillis(s.idleMillis(now))));
         return vars;
+    }
+
+    /** Moves data saved by DirekAntiAFK onto the dkAFK keys, so nobody loses their return spot or idle time. */
+    private void migrateLegacyKeys(PersistentDataContainer data) {
+        moveKey(data, legacyReturnKey, returnKey, PersistentDataType.STRING);
+        moveKey(data, legacyIdleKey, idleKey, PersistentDataType.LONG);
+        moveKey(data, legacyQuitKey, quitKey, PersistentDataType.LONG);
+    }
+
+    private static <T> void moveKey(PersistentDataContainer data, NamespacedKey from, NamespacedKey to,
+                                    PersistentDataType<T, T> type) {
+        T value = data.get(from, type);
+        if (value == null) return;
+        if (!data.has(to, type)) data.set(to, type, value);
+        data.remove(from);
     }
 
     private void saveReturnLocation(Player player, Location location) {

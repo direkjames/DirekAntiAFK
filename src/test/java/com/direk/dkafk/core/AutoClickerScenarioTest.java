@@ -1,4 +1,4 @@
-package dev.antiafk.core;
+package com.direk.dkafk.core;
 
 import org.junit.jupiter.api.Test;
 

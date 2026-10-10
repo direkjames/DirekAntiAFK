@@ -1,16 +1,32 @@
-name: DirekAntiAFK
+name: dkAFK
 version: '${version}'
-main: dev.antiafk.AntiAfkPlugin
+main: com.direk.dkafk.DkAfk
 api-version: '26.1'
-description: Detects AFK players, including AFK pools, vehicles, macros and auto-clickers.
-depend: [PlaceholderAPI]
+author: direk james
+description: AFK detection for the dk suite. Catches AFK pools, vehicles, macros and auto-clickers.
+depend: [dkCore, PlaceholderAPI]
+# Plugins that still depend on the old name keep loading.
+provides: [DirekAntiAFK]
 
-# Commands are registered with Paper's Brigadier API in code, so none are listed here.
+# Commands are registered with Paper's Brigadier API in code, so none are listed here:
+# /dkafk (aliases /antiafk and /aafk).
 
 permissions:
-  antiafk.admin:
-    description: Use /antiafk reload, list, check and debug.
+  dkafk.admin:
+    description: Use /dkafk reload, list, check and debug.
     default: op
-  antiafk.bypass:
+  dkafk.bypass:
     description: Never marked AFK.
     default: false
+
+  # Old DirekAntiAFK permissions, so existing LuckPerms setups keep working.
+  antiafk.admin:
+    description: Old name of dkafk.admin.
+    default: false
+    children:
+      dkafk.admin: true
+  antiafk.bypass:
+    description: Old name of dkafk.bypass.
+    default: false
+    children:
+      dkafk.bypass: true

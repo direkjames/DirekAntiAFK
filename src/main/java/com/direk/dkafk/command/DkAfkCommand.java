@@ -1,14 +1,14 @@
-package dev.antiafk.command;
+package com.direk.dkafk.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.LiteralCommandNode;
-import dev.antiafk.AntiAfkPlugin;
-import dev.antiafk.Messenger;
-import dev.antiafk.PlayerSession;
-import dev.antiafk.core.ActivityKind;
-import dev.antiafk.core.TimeParser;
+import com.direk.dkafk.DkAfk;
+import com.direk.dkafk.Messenger;
+import com.direk.dkafk.PlayerSession;
+import com.direk.dkafk.core.ActivityKind;
+import com.direk.dkafk.core.TimeParser;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
@@ -21,28 +21,30 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * /antiafk
+ * /dkafk (aliases /antiafk and /aafk)
  * <pre>
  *   reload          - reload config.yml
  *   list            - who is AFK
  *   check &lt;player&gt;  - full AFK status and why recent actions were ignored
  *   debug &lt;player&gt;  - live feed of what counts / doesn't count for a player
  * </pre>
+ * Author: direk james
  */
-public final class AntiAfkCommand {
+public final class DkAfkCommand {
 
-    public static final String NAME = "antiafk";
-    public static final List<String> ALIASES = List.of("aafk");
+    public static final String NAME = "dkafk";
+    /** antiafk is the DirekAntiAFK-era name, kept so muscle memory and scripts still work. */
+    public static final List<String> ALIASES = List.of("antiafk", "aafk");
 
-    private final AntiAfkPlugin plugin;
+    private final DkAfk plugin;
 
-    public AntiAfkCommand(AntiAfkPlugin plugin) {
+    public DkAfkCommand(DkAfk plugin) {
         this.plugin = plugin;
     }
 
     public LiteralCommandNode<CommandSourceStack> build() {
         return Commands.literal(NAME)
-                .requires(src -> src.getSender().hasPermission("antiafk.admin"))
+                .requires(src -> src.getSender().hasPermission("dkafk.admin"))
                 .then(Commands.literal("reload").executes(this::reload))
                 .then(Commands.literal("list").executes(this::list))
                 .then(Commands.literal("check")

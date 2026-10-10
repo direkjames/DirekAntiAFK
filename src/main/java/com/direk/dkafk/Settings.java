@@ -1,7 +1,7 @@
-package dev.antiafk;
+package com.direk.dkafk;
 
-import dev.antiafk.core.TimeParser;
-import dev.antiafk.core.TimeRange;
+import com.direk.dkafk.core.TimeParser;
+import com.direk.dkafk.core.TimeRange;
 import org.bukkit.GameMode;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;

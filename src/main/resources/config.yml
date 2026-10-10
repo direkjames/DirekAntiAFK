@@ -1,16 +1,20 @@
 # ============================================================
-#  DirekAntiAFK configuration
+#  dkAFK configuration (formerly DirekAntiAFK)  -  by direk james
 #  Text uses MiniMessage: https://docs.advntr.dev/minimessage/format.html
 #  Times accept: 300 (seconds), 5m, 1h30m, 1:30 (hours:minutes)
 #
 #  All text supports PlaceholderAPI placeholders for the player it's about.
 #  The defaults use:
 #    %player%        the player's name (built in, no expansion needed)
-#    %antiafk_idle%  this plugin's own placeholder (how long they've been idle)
+#    %dkafk_idle%    this plugin's own placeholder (how long they've been idle)
+#  The old %antiafk_...% placeholders still work too.
 #  <prefix> is the prefix below.
 # ============================================================
 
-prefix: "<dark_gray>[<red>DirekAntiAFK</red>]</dark_gray> "
+prefix: "<dark_gray>[<red>dkAFK</red>]</dark_gray> "
+
+# Show the dkAFK banner in the console on startup
+startup-banner: true
 
 # ------------------------------------------------------------
 #  Timing
@@ -44,7 +48,7 @@ check:
   timeout: "30s"
   dialog:
     title: "<red><bold>Are you still there?"
-    body: "<gray>You've been AFK for <white>%antiafk_idle%</white>.\n<gray>Press the button within <white><timeout></white> or you'll be moved for being AFK."
+    body: "<gray>You've been AFK for <white>%dkafk_idle%</white>.\n<gray>Press the button within <white><timeout></white> or you'll be moved for being AFK."
     button: "<green><bold>I'm here!"
     button-tooltip: "<gray>Click to continue playing"
   chat:
@@ -64,7 +68,7 @@ check:
 #  %player% and PlaceholderAPI placeholders work in every line.
 # ------------------------------------------------------------
 actions:
-  - "[message] <prefix><gray>You were AFK for <white>%antiafk_idle%</white>, sending you to the AFK area."
+  - "[message] <prefix><gray>You were AFK for <white>%dkafk_idle%</white>, sending you to the AFK area."
   - "[console] warp AFKZone %player%"
   # Or skip the warp plugin and its warmup entirely:
   # - "[teleport] world 0.5 100 0.5 180 0"
@@ -85,8 +89,8 @@ return:
   message: "<prefix><green>Welcome back! Taking you back to where you were."
 
 # ------------------------------------------------------------
-#  AFK tag for TAB / chat: %antiafk_tag% shows this while the player is AFK
-#  and nothing otherwise. Example TAB suffix: "%antiafk_tag%"
+#  AFK tag for TAB / chat: %dkafk_tag% shows this while the player is AFK
+#  and nothing otherwise. Example TAB suffix: "%dkafk_tag%"
 # ------------------------------------------------------------
 afk-tag: " <gray>[AFK]"
 # legacy      = §-color codes (TAB, most plugins)
@@ -96,9 +100,9 @@ placeholder-format: legacy
 # ------------------------------------------------------------
 #  Who and where
 # ------------------------------------------------------------
-# Players with antiafk.bypass are never marked AFK.
+# Players with dkafk.bypass are never marked AFK.
 # OP players are skipped too while this is true. To test the plugin on yourself, set
-# it to false (and leave creative mode). /antiafk check <player> shows if someone is exempt.
+# it to false (and leave creative mode). /dkafk check <player> shows if someone is exempt.
 exempt-ops: true
 exempt-gamemodes: [CREATIVE, SPECTATOR]
 
@@ -169,7 +173,7 @@ messages:
   reloaded: "<prefix><green>Configuration reloaded."
   player-not-found: "<prefix><red>That player isn't online."
   list-header: "<prefix><gray>AFK players (<white><count></white>):"
-  list-entry: " <dark_gray>-</dark_gray> <white>%player%</white> <gray>(%antiafk_idle%)"
+  list-entry: " <dark_gray>-</dark_gray> <white>%player%</white> <gray>(%dkafk_idle%)"
   list-empty: "<prefix><gray>Nobody is AFK."
   debug-on: "<prefix><gray>Showing activity debug for <white>%player%</white>. Run again to stop."
   debug-off: "<prefix><gray>Stopped activity debug for <white>%player%</white>."

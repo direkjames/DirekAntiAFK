@@ -1,8 +1,8 @@
-package dev.antiafk.hook;
+package com.direk.dkafk.hook;
 
-import dev.antiafk.AntiAfkPlugin;
-import dev.antiafk.PlayerSession;
-import dev.antiafk.core.TimeParser;
+import com.direk.dkafk.DkAfk;
+import com.direk.dkafk.PlayerSession;
+import com.direk.dkafk.core.TimeParser;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 
@@ -12,30 +12,35 @@ import java.util.Locale;
 /**
  * PlaceholderAPI placeholders:
  * <ul>
- *     <li>{@code %antiafk_tag%} — the afk-tag while AFK, otherwise empty (for TAB suffixes)</li>
- *     <li>{@code %antiafk_afk%} — {@code true} or {@code false}</li>
- *     <li>{@code %antiafk_idle%} — time since last real activity, e.g. "4m 30s"</li>
- *     <li>{@code %antiafk_idle_seconds%} — the same in seconds</li>
- *     <li>{@code %antiafk_afk_time%} — idle time while AFK, otherwise empty</li>
+ *     <li>{@code %dkafk_tag%} — the afk-tag while AFK, otherwise empty (for TAB suffixes)</li>
+ *     <li>{@code %dkafk_afk%} — {@code true} or {@code false}</li>
+ *     <li>{@code %dkafk_idle%} — time since last real activity, e.g. "4m 30s"</li>
+ *     <li>{@code %dkafk_idle_seconds%} — the same in seconds</li>
+ *     <li>{@code %dkafk_afk_time%} — idle time while AFK, otherwise empty</li>
  * </ul>
+ * Registered twice: as {@code dkafk}, and as {@code antiafk} so DirekAntiAFK-era configs keep working.
+ * <p>
+ * Author: direk james
  */
-public final class AntiAfkExpansion extends PlaceholderExpansion {
+public final class DkAfkExpansion extends PlaceholderExpansion {
 
-    private final AntiAfkPlugin plugin;
+    private final DkAfk plugin;
+    private final String identifier;
 
-    public AntiAfkExpansion(AntiAfkPlugin plugin) {
+    public DkAfkExpansion(DkAfk plugin, String identifier) {
         this.plugin = plugin;
+        this.identifier = identifier;
     }
 
     @Override
     public String getIdentifier() {
-        return "antiafk";
+        return identifier;
     }
 
     @Override
     public String getAuthor() {
         String authors = String.join(", ", plugin.getPluginMeta().getAuthors());
-        return authors.isEmpty() ? "DirekAntiAFK" : authors;
+        return authors.isEmpty() ? "direk james" : authors;
     }
 
     @Override

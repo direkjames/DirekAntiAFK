@@ -1,4 +1,4 @@
-package dev.antiafk.core;
+package com.direk.dkafk.core;
 
 /**
  * Remembers when each kind of activity last earned credit. The player's last activity is the newest credit.

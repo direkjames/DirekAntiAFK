@@ -1,4 +1,4 @@
-package dev.antiafk.hook;
+package com.direk.dkafk.hook;
 
 import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.OfflinePlayer;

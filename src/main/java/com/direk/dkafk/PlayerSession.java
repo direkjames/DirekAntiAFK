@@ -1,11 +1,11 @@
-package dev.antiafk;
+package com.direk.dkafk;
 
-import dev.antiafk.core.ActivityKind;
-import dev.antiafk.core.ActivityLedger;
-import dev.antiafk.core.ClickTracker;
-import dev.antiafk.core.LookTracker;
-import dev.antiafk.core.MovementTracker;
-import dev.antiafk.core.RepeatTracker;
+import com.direk.dkafk.core.ActivityKind;
+import com.direk.dkafk.core.ActivityLedger;
+import com.direk.dkafk.core.ClickTracker;
+import com.direk.dkafk.core.LookTracker;
+import com.direk.dkafk.core.MovementTracker;
+import com.direk.dkafk.core.RepeatTracker;
 import org.bukkit.Location;
 
 import java.util.EnumMap;
@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Everything DirekAntiAFK tracks about one online player. Updated on the main thread;
+ * Everything dkAFK tracks about one online player. Updated on the main thread;
  * placeholders may read {@link #isAfk()} and {@link #idleMillis(long)} from other threads.
  */
 public final class PlayerSession {
@@ -46,7 +46,7 @@ public final class PlayerSession {
     ClickTracker attackClicks;
     ClickTracker useClicks;
 
-    /** Latest reason each kind of activity was ignored, for /antiafk check. */
+    /** Latest reason each kind of activity was ignored, for /dkafk check. */
     final Map<ActivityKind, String> lastIgnored = new EnumMap<>(ActivityKind.class);
     /** Debug rate limit: last time a line was sent per kind, [counted, ignored]. */
     final long[] lastDebug = new long[KINDS * 2];

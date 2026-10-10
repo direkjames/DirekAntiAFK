@@ -1,8 +1,8 @@
-package dev.antiafk;
+package com.direk.dkafk;
 
-import dev.antiafk.core.ActivityKind;
-import dev.antiafk.core.ClickTracker;
-import dev.antiafk.core.MovementTracker;
+import com.direk.dkafk.core.ActivityKind;
+import com.direk.dkafk.core.ClickTracker;
+import com.direk.dkafk.core.MovementTracker;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -46,9 +46,9 @@ import java.util.Locale;
  */
 public final class ActivityListener implements Listener {
 
-    private final AntiAfkPlugin plugin;
+    private final DkAfk plugin;
 
-    public ActivityListener(AntiAfkPlugin plugin) {
+    public ActivityListener(DkAfk plugin) {
         this.plugin = plugin;
     }
 

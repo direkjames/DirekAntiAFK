@@ -1,6 +1,6 @@
-package dev.antiafk;
+package com.direk.dkafk;
 
-import dev.antiafk.hook.PapiHook;
+import com.direk.dkafk.hook.PapiHook;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -29,9 +29,9 @@ public final class Messenger {
             .useUnusualXRepeatedCharacterHexFormat()
             .build();
 
-    private final AntiAfkPlugin plugin;
+    private final DkAfk plugin;
 
-    public Messenger(AntiAfkPlugin plugin) {
+    public Messenger(DkAfk plugin) {
         this.plugin = plugin;
     }
 
