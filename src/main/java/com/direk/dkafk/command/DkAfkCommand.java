@@ -94,9 +94,10 @@ public final class DkAfkCommand {
 
         long now = System.currentTimeMillis();
         String exempt = plugin.afkManager().exemptReason(target);
-        String status = exempt != null ? "<yellow>never checked" : s.isAfk() ? "<red>AFK" : "<green>Active";
+        String status = s.isAfk() ? "<red>AFK" : exempt != null ? "<yellow>never checked" : "<green>Active";
 
-        line(sender, "<prefix><white><player></white> <gray>is " + status, Map.of("player", target.getName()));
+        line(sender, "<prefix><white><player></white> <gray>is " + status
+                + (s.isManualAfk() ? " <dark_gray>(used /afk)" : ""), Map.of("player", target.getName()));
         if (exempt != null) {
             line(sender, " <yellow>Exempt: <player> <exempt>", Map.of("player", target.getName(), "exempt", exempt));
         }

@@ -28,6 +28,10 @@ public final class PlayerSession {
 
     // State
     volatile boolean afk;
+    /** AFK because they used /afk (cleared as soon as they're not AFK). Exempt players keep this kind of AFK. */
+    volatile boolean manualAfk;
+    /** Last time /afk was used, for its cooldown. */
+    long lastAfkCommand;
     /** Idle time at which this AFK period's check (or actions) happens, picked from action-time. */
     long actionAtMillis;
     /** When the "are you still there" check was shown, or 0 if it isn't showing. */
@@ -89,6 +93,10 @@ public final class PlayerSession {
 
     public long actionAtMillis() {
         return actionAtMillis;
+    }
+
+    public boolean isManualAfk() {
+        return manualAfk;
     }
 
     public boolean isCheckShowing() {

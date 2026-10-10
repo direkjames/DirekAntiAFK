@@ -1,5 +1,6 @@
 package com.direk.dkafk;
 
+import com.direk.dkafk.command.AfkCommand;
 import com.direk.dkafk.command.DkAfkCommand;
 import com.direk.dkafk.core.TimeParser;
 import com.direk.dkafk.hook.DkAfkExpansion;
@@ -60,8 +61,11 @@ public final class DkAfk extends DkPlugin {
         Bukkit.getServicesManager().register(AfkService.class, service, this, ServicePriority.Normal);
 
         DkAfkCommand command = new DkAfkCommand(this);
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(command.build(), "dkAFK admin commands", DkAfkCommand.ALIASES));
+        AfkCommand afkCommand = new AfkCommand(this);
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            event.registrar().register(command.build(), "dkAFK admin commands", DkAfkCommand.ALIASES);
+            event.registrar().register(afkCommand.build(), "Go AFK, or come back");
+        });
 
         placeholderApi = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI");
         if (placeholderApi) {

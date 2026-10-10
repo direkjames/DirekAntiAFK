@@ -252,7 +252,8 @@ public final class AfkManager {
                 // Hold the timer still. This doesn't trigger a return; only real activity does.
                 s.ledger.credit(ActivityKind.EXEMPT, now);
                 if (s.checkStartedAt != 0) closeCheck(player, s);
-                if (s.afk) setAfk(player, s, false);
+                // A /afk they chose themselves stays; only the automatic kind is cleared.
+                if (s.afk && !s.manualAfk) setAfk(player, s, false);
                 continue;
             }
 
@@ -277,15 +278,58 @@ public final class AfkManager {
     }
 
     private void setAfk(Player player, PlayerSession s, boolean afk) {
+        setAfk(player, s, afk, afk ? "now-afk" : "no-longer-afk");
+    }
+
+    private void setAfk(Player player, PlayerSession s, boolean afk, String messageKey) {
         s.afk = afk;
+        if (!afk) s.manualAfk = false;
         long now = System.currentTimeMillis();
         // Each AFK period gets its own random check time, so players can't learn when it comes.
         if (afk) s.actionAtMillis = pickActionTime(plugin.settings());
         Map<String, String> vars = vars(player, s, now);
         Messenger messenger = plugin.messenger();
-        messenger.send(player, afk ? "now-afk" : "no-longer-afk", vars, player);
+        messenger.send(player, messageKey, vars, player);
         messenger.broadcast(afk ? "broadcast-afk" : "broadcast-back", vars, player);
         Bukkit.getPluginManager().callEvent(new DkAfkChangeEvent(player, afk));
+    }
+
+    /**
+     * /afk: go AFK now, or come back if they went AFK with /afk and have been active recently.
+     * <p>
+     * Coming back this way never resets the AFK timer. If they've really been idle past afk-time,
+     * they stay AFK and have to move or look around, so spamming /afk can't dodge detection.
+     */
+    public void toggleManual(Player player) {
+        PlayerSession s = sessions.get(player.getUniqueId());
+        if (s == null) return;
+        Settings settings = plugin.settings();
+        Messenger messenger = plugin.messenger();
+        long now = System.currentTimeMillis();
+        Map<String, String> vars = vars(player, s, now);
+
+        long cooldown = settings.afkCommandCooldown.toMillis();
+        long left = s.lastAfkCommand + cooldown - now;
+        if (left > 0) {
+            vars.put("time", TimeParser.format(Duration.ofMillis(Math.max(1000, left))));
+            messenger.send(player, "afk-command-cooldown", vars, player);
+            return;
+        }
+        s.lastAfkCommand = now;
+
+        if (!s.afk) {
+            s.manualAfk = true;
+            setAfk(player, s, true, "afk-command-on");
+            return;
+        }
+        if (s.manualAfk && s.idleMillis(now) < settings.afkTime.toMillis()) {
+            if (s.checkStartedAt != 0) closeCheck(player, s);
+            setAfk(player, s, false);
+            return;
+        }
+        // AFK from being idle (or idle long enough since /afk): only real activity brings them back.
+        s.manualAfk = false;
+        messenger.send(player, "afk-command-idle", vars, player);
     }
 
     private static long pickActionTime(Settings settings) {

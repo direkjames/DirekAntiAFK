@@ -115,13 +115,15 @@ Teleports (warps, `/is go`, the AFK area) never count as activity.
 | `/dkafk list` | Show AFK players |
 | `/dkafk check <player>` | Status, idle time, last activity, and why recent actions were ignored |
 | `/dkafk debug <player>` | Live feed of what counts and what doesn't for that player. Run again to stop |
+| `/afk` | Players: go AFK now, or come back (see below) |
 
-Aliases: `/antiafk`, `/aafk`.
+Aliases of `/dkafk`: `/antiafk`, `/aafk`.
 
 | Permission | Default | Meaning |
 |---|---|---|
 | `dkafk.admin` | op | Use the commands above |
 | `dkafk.bypass` | nobody | Never marked AFK |
+| `dkafk.afk` | everyone | Use `/afk` |
 
 The old `antiafk.admin` and `antiafk.bypass` still work and grant the new permissions.
 
@@ -129,6 +131,21 @@ OP players are also skipped while `exempt-ops: true` (the default), and so are p
 spectator mode. **To test the plugin on yourself, set `exempt-ops: false` and use survival mode.**
 `/dkafk check <player>` and `/dkafk debug <player>` say when, and why, a player is exempt. If you use a wildcard (`*`) in LuckPerms, set `dkafk.bypass`
 to false for anyone who should still be checked.
+
+## /afk
+
+Players can mark themselves AFK with `/afk` (permission `dkafk.afk`, everyone by default):
+
+- The AFK tag shows, `broadcast-afk` is sent and other dk plugins see them as AFK straight away.
+- Moving, looking around or chatting brings them back, the same as normal AFK.
+- `/afk` again also brings them back, but only if they've been active within `afk-time`. Otherwise they're
+  told to move or look around, so spamming `/afk` (or a macro doing it) can never reset the AFK timer.
+- The check and actions still come at `action-time`, counted from their last real activity.
+- OPs and other exempt players can use it too. They get the tag but never the check or actions.
+- `afk-command.cooldown` (3s) limits how often it can be used.
+
+If EssentialsX is installed it has its own `/afk`. Add `afk` to `disabled-commands` in Essentials'
+`config.yml` so dkAFK's is used. `/dkafk:afk` always reaches dkAFK's.
 
 ## Placeholders (PlaceholderAPI)
 

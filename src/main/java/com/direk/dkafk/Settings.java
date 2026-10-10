@@ -46,6 +46,9 @@ public final class Settings {
     public final String afkTag;
     public final boolean placeholderLegacy;
 
+    /** How often a player can use /afk. */
+    public final Duration afkCommandCooldown;
+
     public final boolean exemptOps;
     public final Set<GameMode> exemptGameModes;
     public final boolean worldWhitelist;
@@ -122,6 +125,7 @@ public final class Settings {
             }
         }
         exemptGameModes = modes;
+        afkCommandCooldown = optionalTime(c, "afk-command.cooldown", "3s", logger);
         exemptOps = c.getBoolean("exempt-ops", true);
         worldWhitelist = "whitelist".equalsIgnoreCase(c.getString("worlds.mode", "blacklist"));
         worlds = Set.copyOf(c.getStringList("worlds.list"));

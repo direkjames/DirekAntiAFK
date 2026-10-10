@@ -98,6 +98,17 @@ afk-tag: " <gray>[AFK]"
 placeholder-format: legacy
 
 # ------------------------------------------------------------
+#  /afk: players mark themselves AFK (permission dkafk.afk)
+#  It works like being AFK from idling: the tag shows, and moving, looking around or
+#  chatting brings them back. /afk again also brings them back, but only if they've
+#  been active within afk-time, so it can never be used to reset the AFK timer.
+#  The check and actions still come at action-time, counted from their last activity.
+# ------------------------------------------------------------
+afk-command:
+  # How often a player can use /afk ("0" = no limit)
+  cooldown: "3s"
+
+# ------------------------------------------------------------
 #  Who and where
 # ------------------------------------------------------------
 # Players with dkafk.bypass are never marked AFK.
@@ -177,3 +188,7 @@ messages:
   list-empty: "<prefix><gray>Nobody is AFK."
   debug-on: "<prefix><gray>Showing activity debug for <white>%player%</white>. Run again to stop."
   debug-off: "<prefix><gray>Stopped activity debug for <white>%player%</white>."
+  # /afk
+  afk-command-on: "<prefix><gray>You are now AFK. Move or look around to come back."
+  afk-command-idle: "<prefix><gray>You're AFK from being idle. Move or look around to come back."
+  afk-command-cooldown: "<prefix><red>Wait <white><time></white> before using /afk again."
